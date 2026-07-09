@@ -59,7 +59,7 @@ data class CanvasItem(
 )
 
 @Dao
-interface RefCanvasDao {
+interface DroidCanvasDao {
     @Query("SELECT * FROM boards ORDER BY createdAt ASC")
     fun getAllBoards(): Flow<List<Board>>
 
@@ -92,12 +92,12 @@ interface RefCanvasDao {
 }
 
 @Database(entities = [Board::class, CanvasItem::class], version = 5, exportSchema = false)
-abstract class RefCanvasDatabase : RoomDatabase() {
-    abstract fun refCanvasDao(): RefCanvasDao
+abstract class DroidCanvasDatabase : RoomDatabase() {
+    abstract fun droidCanvasDao(): DroidCanvasDao
 
     companion object {
         @Volatile
-        private var INSTANCE: RefCanvasDatabase? = null
+        private var INSTANCE: DroidCanvasDatabase? = null
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -126,12 +126,12 @@ abstract class RefCanvasDatabase : RoomDatabase() {
             }
         }
 
-        fun getDatabase(context: Context): RefCanvasDatabase {
+        fun getDatabase(context: Context): DroidCanvasDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
-                    RefCanvasDatabase::class.java,
-                    "ref_canvas_database"
+                    DroidCanvasDatabase::class.java,
+                    "droid_canvas_database"
                 )
                 .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .fallbackToDestructiveMigration()
@@ -143,7 +143,7 @@ abstract class RefCanvasDatabase : RoomDatabase() {
     }
 }
 
-class RefCanvasRepository(private val dao: RefCanvasDao) {
+class DroidCanvasRepository(private val dao: DroidCanvasDao) {
     val allBoards: Flow<List<Board>> = dao.getAllBoards()
 
     suspend fun getBoardById(id: Int): Board? = dao.getBoardById(id)

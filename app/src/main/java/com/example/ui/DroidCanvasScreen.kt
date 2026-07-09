@@ -176,8 +176,8 @@ import kotlin.math.floor
 import kotlin.math.ceil
 
 @Composable
-fun RefCanvasScreen(
-    viewModel: RefCanvasViewModel
+fun DroidCanvasScreen(
+    viewModel: DroidCanvasViewModel
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -2308,28 +2308,25 @@ private fun adjustPositionForScale(
     u: Float, // opposite corner relative X: -0.5f for left, 0.5f for right
     v: Float  // opposite corner relative Y: -0.5f for top, 0.5f for bottom
 ): Pair<Float, Float> {
-    val deltaScale = oldScale - newScale
-    val rotationRad = java.lang.Math.toRadians(rotationDegrees.toDouble())
-    val cosVal = java.lang.Math.cos(rotationRad).toFloat()
-    val sinVal = java.lang.Math.sin(rotationRad).toFloat()
-
-    val dxDiff = u * widthPx * deltaScale
-    val dyDiff = v * heightPx * deltaScale
-
-    val dxRotatedDiff = dxDiff * cosVal - dyDiff * sinVal
-    val dyRotatedDiff = dxDiff * sinVal + dyDiff * cosVal
-
-    val newPosX = posX + (widthPx / 2f) * deltaScale + dxRotatedDiff
-    val newPosY = posY + (heightPx / 2f) * deltaScale + dyRotatedDiff
-
-    return Pair(newPosX, newPosY)
+    val result = CanvasMathHelper.adjustPositionForScale(
+        oldScale,
+        newScale,
+        posX,
+        posY,
+        widthPx,
+        heightPx,
+        rotationDegrees,
+        u,
+        v
+    )
+    return Pair(result.posX, result.posY)
 }
 
 @Composable
 fun CanvasItemView(
     item: CanvasItem,
     isSelected: Boolean,
-    viewModel: RefCanvasViewModel,
+    viewModel: DroidCanvasViewModel,
     globalIsMultiTouch: Boolean,
     viewportWidth: Float,
     viewportHeight: Float
@@ -2923,7 +2920,7 @@ fun CanvasItemView(
 }
 
 @Composable
-fun ZoomPercentageText(viewModel: RefCanvasViewModel) {
+fun ZoomPercentageText(viewModel: DroidCanvasViewModel) {
     Text(
         text = "${(viewModel.canvasScale * 100).roundToInt()}%",
         color = MaterialTheme.colorScheme.onSurface,

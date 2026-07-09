@@ -20,16 +20,16 @@ import coil.Coil
 import coil.ImageLoader
 import coil.decode.GifDecoder
 import coil.decode.ImageDecoderDecoder
-import com.example.data.RefCanvasDatabase
-import com.example.data.RefCanvasRepository
-import com.example.ui.RefCanvasScreen
-import com.example.ui.RefCanvasViewModel
-import com.example.ui.RefCanvasViewModelFactory
+import com.example.data.DroidCanvasDatabase
+import com.example.data.DroidCanvasRepository
+import com.example.ui.DroidCanvasScreen
+import com.example.ui.DroidCanvasViewModel
+import com.example.ui.DroidCanvasViewModelFactory
 import com.example.ui.theme.MyApplicationTheme
 
 class MainActivity : ComponentActivity() {
     private val TAG = "MainActivity"
-    private lateinit var viewModel: RefCanvasViewModel
+    private lateinit var viewModel: DroidCanvasViewModel
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,14 +48,14 @@ class MainActivity : ComponentActivity() {
         Coil.setImageLoader(imageLoader)
 
         // 1. Initialize local Room database & Repository
-        val database = RefCanvasDatabase.getDatabase(applicationContext)
-        val repository = RefCanvasRepository(database.refCanvasDao())
+        val database = DroidCanvasDatabase.getDatabase(applicationContext)
+        val repository = DroidCanvasRepository(database.droidCanvasDao())
 
-        // 2. Instantiate RefCanvas ViewModel
+        // 2. Instantiate DroidCanvas ViewModel
         viewModel = ViewModelProvider(
             this, 
-            RefCanvasViewModelFactory(repository, applicationContext)
-        )[RefCanvasViewModel::class.java]
+            DroidCanvasViewModelFactory(repository, applicationContext)
+        )[DroidCanvasViewModel::class.java]
 
         // 3. Handle initial launch intents (e.g. shared images from other apps)
         handleShareIntent(intent)
@@ -76,7 +76,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    RefCanvasScreen(
+                    DroidCanvasScreen(
                         viewModel = viewModel
                     )
                 }

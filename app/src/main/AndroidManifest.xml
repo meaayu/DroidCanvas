@@ -36,14 +36,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
             
-            <!-- Support sharing a single image into RefCanvas -->
+            <!-- Support sharing a single image into DroidCanvas -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
             </intent-filter>
             
-            <!-- Support sharing multiple images into RefCanvas -->
+            <!-- Support sharing multiple images into DroidCanvas -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />

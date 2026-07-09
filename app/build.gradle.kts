@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-  namespace = "com.meaayu.droidcanvas"
+  namespace = "com.example"
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.meaayu.droidcanvas"
+    applicationId = "com.refcanvas.app"
     minSdk = 24
     targetSdk = 36
     versionCode = 1
@@ -21,12 +21,11 @@ android {
 
   signingConfigs {
     create("release") {
-      // Matches the file name decoded in the GitHub Actions workflow
-      val keystorePath = System.getenv("ANDROID_KEYSTORE_FILE") ?: "${rootDir}/my-release-key.jks"
+      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
       storeFile = file(keystorePath)
-      storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
-      keyAlias = System.getenv("ANDROID_KEY_ALIAS") ?: "my-key-alias"
-      keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+      storePassword = System.getenv("STORE_PASSWORD")
+      keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
+      keyPassword = System.getenv("KEY_PASSWORD")
     }
     create("debugConfig") {
       storeFile = file("${rootDir}/debug.keystore")

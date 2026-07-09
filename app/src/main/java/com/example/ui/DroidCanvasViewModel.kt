@@ -12,7 +12,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.Board
 import com.example.data.CanvasItem
 import com.example.data.ImageStorageHelper
-import com.example.data.RefCanvasRepository
+import com.example.data.DroidCanvasRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.onEach
@@ -30,11 +30,11 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
 
-class RefCanvasViewModel(
-    private val repository: RefCanvasRepository,
+class DroidCanvasViewModel(
+    private val repository: DroidCanvasRepository,
     context: Context
 ) : ViewModel() {
-    private val TAG = "RefCanvasViewModel"
+    private val TAG = "DroidCanvasViewModel"
     private val appContext = context.applicationContext
     private val prefs = context.getSharedPreferences("canvas_view_prefs", Context.MODE_PRIVATE)
 
@@ -1064,14 +1064,14 @@ class RefCanvasViewModel(
     }
 }
 
-class RefCanvasViewModelFactory(
-    private val repository: RefCanvasRepository,
+class DroidCanvasViewModelFactory(
+    private val repository: DroidCanvasRepository,
     private val context: Context
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        if (modelClass.isAssignableFrom(RefCanvasViewModel::class.java)) {
+        if (modelClass.isAssignableFrom(DroidCanvasViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return RefCanvasViewModel(repository, context) as T
+            return DroidCanvasViewModel(repository, context) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
