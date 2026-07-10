@@ -210,34 +210,10 @@ class DroidCanvasViewModel(
     private val _selectedItemId = MutableStateFlow<Int?>(null)
     val selectedItemId: StateFlow<Int?> = _selectedItemId.asStateFlow()
 
-    // Multiple selection support
-    private val _selectedItemIds = MutableStateFlow<Set<Int>>(emptySet())
-    val selectedItemIds: StateFlow<Set<Int>> = _selectedItemIds.asStateFlow()
-
     var lastItemTapTime = 0L
 
-    fun toggleItemSelection(itemId: Int) {
-        if (isLocked) return
-        val current = _selectedItemIds.value
-        val updated = if (current.contains(itemId)) {
-            current - itemId
-        } else {
-            current + itemId
-        }
-        _selectedItemIds.value = updated
-        _selectedItemId.value = updated.lastOrNull()
-    }
-
     fun clearSelection() {
-        _selectedItemIds.value = emptySet()
         _selectedItemId.value = null
-    }
-
-    fun selectAllItems() {
-        if (isLocked) return
-        val allIds = canvasItems.value.map { it.id }.toSet()
-        _selectedItemIds.value = allIds
-        _selectedItemId.value = allIds.lastOrNull()
     }
 
     var isLocked by mutableStateOf(false)
@@ -432,7 +408,6 @@ class DroidCanvasViewModel(
     fun selectBoard(boardId: Int) {
         setCurrentBoardId(boardId)
         _selectedItemId.value = null
-        _selectedItemIds.value = emptySet()
     }
 
     fun createBoard(name: String) {
@@ -478,10 +453,8 @@ class DroidCanvasViewModel(
     fun selectItem(itemId: Int?) {
         if (isLocked) {
             _selectedItemId.value = null
-            _selectedItemIds.value = emptySet()
         } else {
             _selectedItemId.value = itemId
-            _selectedItemIds.value = if (itemId != null) setOf(itemId) else emptySet()
         }
     }
 
@@ -757,6 +730,14 @@ class DroidCanvasViewModel(
         }
     }
 
+    fun toggleGrayscale(item: CanvasItem) {
+        saveCurrentStateToUndo()
+        viewModelScope.launch(Dispatchers.IO) {
+            val updated = item.copy(isGrayscale = !item.isGrayscale)
+            repository.updateCanvasItem(updated)
+        }
+    }
+
     fun bringToFront(item: CanvasItem) {
         saveCurrentStateToUndo()
         viewModelScope.launch(Dispatchers.IO) {
@@ -823,120 +804,6 @@ class DroidCanvasViewModel(
             // ImageStorageHelper.deleteImageFiles(item.fullPath, item.thumbPath)
             if (_selectedItemId.value == item.id) {
                 _selectedItemId.value = null
-            }
-            val currentSet = _selectedItemIds.value
-            if (currentSet.contains(item.id)) {
-                _selectedItemIds.value = currentSet - item.id
-            }
-        }
-    }
-
-    fun duplicateSelectedItems() {
-        val idsToDuplicate = _selectedItemIds.value
-        if (idsToDuplicate.isEmpty()) return
-        saveCurrentStateToUndo()
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val currentItems = canvasItems.value
-                val itemsToDuplicate = currentItems.filter { it.id in idsToDuplicate }
-                if (itemsToDuplicate.isEmpty()) return@launch
-                val firstItem = itemsToDuplicate.first()
-                var maxZ = repository.getMaxZIndex(firstItem.boardId) ?: 0
-                val newSelectedIds = mutableSetOf<Int>()
-                
-                itemsToDuplicate.forEach { item ->
-                    val id = UUID.randomUUID().toString()
-                    val oldFull = File(item.fullPath)
-                    val oldThumb = File(item.thumbPath)
-                    val parentFile = oldFull.parentFile
-                    if (parentFile != null) {
-                        val newFull = File(parentFile, "ref_full_$id.jpg")
-                        val newThumb = File(parentFile, "ref_thumb_$id.jpg")
-                        if (oldFull.exists()) oldFull.copyTo(newFull)
-                        if (oldThumb.exists()) oldThumb.copyTo(newThumb)
-                        
-                        maxZ += 1
-                        val duplicated = item.copy(
-                            id = 0,
-                            fullPath = newFull.absolutePath,
-                            thumbPath = newThumb.absolutePath,
-                            posX = item.posX + 40f,
-                            posY = item.posY + 40f,
-                            zIndex = maxZ
-                        )
-                        val insertedId = repository.insertCanvasItem(duplicated)
-                        newSelectedIds.add(insertedId.toInt())
-                    }
-                }
-                
-                // Update selection to newly duplicated items
-                _selectedItemIds.value = newSelectedIds
-                _selectedItemId.value = newSelectedIds.lastOrNull()
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to duplicate selected items", e)
-            }
-        }
-    }
-
-    fun bringSelectedToFront() {
-        val ids = _selectedItemIds.value
-        if (ids.isEmpty()) return
-        saveCurrentStateToUndo()
-        viewModelScope.launch(Dispatchers.IO) {
-            val currentItems = canvasItems.value
-            val selectedItems = currentItems.filter { it.id in ids }.sortedBy { it.zIndex }
-            if (selectedItems.isEmpty()) return@launch
-            
-            var maxZ = repository.getMaxZIndex(selectedItems.first().boardId) ?: 0
-            selectedItems.forEach { item ->
-                maxZ += 1
-                repository.updateCanvasItem(item.copy(zIndex = maxZ))
-            }
-        }
-    }
-
-    fun sendSelectedToBack() {
-        val ids = _selectedItemIds.value
-        if (ids.isEmpty()) return
-        saveCurrentStateToUndo()
-        viewModelScope.launch(Dispatchers.IO) {
-            val currentItems = canvasItems.value
-            val selectedItems = currentItems.filter { it.id in ids }.sortedByDescending { it.zIndex }
-            if (selectedItems.isEmpty()) return@launch
-            
-            var minZ = currentItems.minOfOrNull { it.zIndex } ?: 0
-            selectedItems.forEach { item ->
-                minZ -= 1
-                repository.updateCanvasItem(item.copy(zIndex = minZ))
-            }
-        }
-    }
-
-    fun deleteSelectedItems() {
-        val idsToDelete = _selectedItemIds.value
-        if (idsToDelete.isEmpty()) return
-        saveCurrentStateToUndo()
-        viewModelScope.launch(Dispatchers.IO) {
-            val currentItems = canvasItems.value
-            val itemsToDelete = currentItems.filter { it.id in idsToDelete }
-            itemsToDelete.forEach { item ->
-                repository.deleteCanvasItem(item)
-            }
-            clearSelection()
-        }
-    }
-
-    fun togglePinSelectedItems() {
-        val idsToPin = _selectedItemIds.value
-        if (idsToPin.isEmpty()) return
-        saveCurrentStateToUndo()
-        viewModelScope.launch(Dispatchers.IO) {
-            val currentItems = canvasItems.value
-            val selectedItems = currentItems.filter { it.id in idsToPin }
-            if (selectedItems.isEmpty()) return@launch
-            val targetPinState = !selectedItems.first().isPinned
-            selectedItems.forEach { item ->
-                repository.updateCanvasItem(item.copy(isPinned = targetPinState))
             }
         }
     }
