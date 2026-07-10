@@ -54,17 +54,12 @@ cd DroidCanvas
 - [x] Animated GIF support
 - [x] Auto-arrange
 - [x] Multi-image import
+- [x] Undo/Redo
 
-**In Progress:**
+**Incompleted**
 - [ ] Crop tool
-- [ ] Board templates
-- [ ] Layer groups
 - [ ] Export to image
-
-**Planned:**
 - [ ] Tablet optimization
-- [ ] Keyboard shortcuts
-- [ ] Undo/Redo
 
 ---
 
