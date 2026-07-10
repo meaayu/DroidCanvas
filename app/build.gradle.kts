@@ -27,13 +27,19 @@ android {
       keyAlias = System.getenv("ANDROID_KEY_ALIAS") ?: "my-key-alias"
       keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
     }
-    create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
+     create("debugConfig") {
+      // Check if a local debug keystore file exists; otherwise fallback safely
+      val localDebugFile = file("${rootDir}/debug.keystore")
+      storeFile = if (localDebugFile.exists()) {
+        localDebugFile
+      } else {
+        file(System.getProperty("user.home") + "/.android/debug.keystore")
+      }
       storePassword = "android"
       keyAlias = "androiddebugkey"
       keyPassword = "android"
     }
-  }
+
 
   buildTypes {
     release {
