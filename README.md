@@ -82,13 +82,12 @@ Open the project in Android Studio (Giraffe or newer recommended) and run it on 
 
 Planned or under consideration:
 
-- [ ] Grayscale toggle
+- [x] Grayscale toggle
 - [x] Flip horizontal / vertical
 - [ ] Crop tool
-- [ ] Animated GIF support
+- [x] Animated GIF support
 - [x] Auto-arrange / packing on import
 - [x] Multi-image import
-- [ ] Board export / sharing
 
 Have a feature request? Open an issue.
 
