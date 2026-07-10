@@ -17,7 +17,7 @@
 
 ## About
 
-DroidCanvas brings a professional reference board experience directly to your Android device. Organize visual references with an infinite canvas, precise controls, and automatic saving — no account required.
+DroidCanvas brings a professional reference board experience directly to your Android device. Organize visual references with an infinite canvas, precise controls, and automatic saving — no account [...]
 
 ---
 
@@ -48,11 +48,23 @@ cd DroidCanvas
 
 ## 🛣️ Roadmap
 
-**Completed:** Grayscale toggle, Flip transformations, Animated GIF support, Auto-arrange, Multi-image import
+**Completed:**
+- [x] Grayscale toggle
+- [x] Flip transformations
+- [x] Animated GIF support
+- [x] Auto-arrange
+- [x] Multi-image import
 
-**In Progress:** Crop tool, Board templates, Layer groups, Export to image
+**In Progress:**
+- [ ] Crop tool
+- [ ] Board templates
+- [ ] Layer groups
+- [ ] Export to image
 
-**Planned:** Tablet optimization, Keyboard shortcuts, Undo/Redo
+**Planned:**
+- [ ] Tablet optimization
+- [ ] Keyboard shortcuts
+- [ ] Undo/Redo
 
 ---
 
@@ -70,4 +82,3 @@ cd DroidCanvas
 ## 📝 License
 
 MIT License — see [LICENSE](LICENSE) file
-
