@@ -17,7 +17,7 @@
 
 ## About
 
-DroidCanvas brings a professional reference board experience directly to your Android device. Organize visual references with an infinite canvas, precise controls, and automatic saving — no account [...]
+DroidCanvas brings a professional reference board experience directly to your Android device. Organize visual references with an infinite canvas, precise controls, and automatic saving — no account required.
 
 ---
 
@@ -71,6 +71,12 @@ cd DroidCanvas
 4. Push and open a Pull Request
 
 **Requirements:** Android Studio, Kotlin 1.9+, API 26+
+
+---
+
+## 🙏 Acknowledgments
+
+This project was inspired by [@Ruin0x11's DroidRef](https://github.com/Ruin0x11/DroidRef) — an Android image reference board app for artists.
 
 ---
 
