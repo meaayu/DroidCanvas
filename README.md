@@ -16,9 +16,13 @@
 
 ## Overview
 
-DroidCanvas gives artists complete freedom to position reference images exactly how they need them for their creative workflow. Inspired by desktop tools like PureRef, it brings the same idea — a distraction-free, boundless corkboard for visual references — natively to Android, built from the ground up to be intuitive, fast, and lightweight.
+DroidCanvas gives artists complete freedom to position reference images exactly how they need them for their creative workflow. Inspired by desktop tools like PureRef, it brings the same idea — a digital canvas for your references, but built natively for Android.
 
 No accounts, no cloud lock-in. Your boards live on your device.
+
+### [⬇️ Download Latest APK](https://github.com/meaayu/DroidCanvas/releases)
+
+---
 
 ## Features
 
@@ -52,14 +56,13 @@ Add 2–4 screenshots or a short demo GIF here once available. Suggested shots:
 
 ### Download
 
-<!-- Once you have a release, link it here -->
-Grab the latest APK from the [Releases](https://github.com/meaayu/droidcanvas/releases) page.
+Grab the latest APK from the [Releases](https://github.com/meaayu/DroidCanvas/releases) page.
 
 ### Build from source
 
 ```bash
-git clone https://github.com/meaayu/droidcanvas.git
-cd droidcanvas
+git clone https://github.com/meaayu/DroidCanvas.git
+cd DroidCanvas
 ```
 
 Open the project in Android Studio (Giraffe or newer recommended) and run it on a device or emulator, or build from the command line:
