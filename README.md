@@ -76,7 +76,9 @@ cd DroidCanvas
 
 ## 🙏 Acknowledgments
 
-This project was inspired by [@Ruin0x11's DroidRef](https://github.com/Ruin0x11/DroidRef) — an Android image reference board app for artists.
+This project was inspired by:
+- [@Ruin0x11's DroidRef](https://github.com/Ruin0x11/DroidRef) — an Android image reference board app for artists
+- [PureRef](https://www.pureref.com/) — professional reference board software for visual artists
 
 ---
 
