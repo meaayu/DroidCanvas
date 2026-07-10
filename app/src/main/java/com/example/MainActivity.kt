@@ -67,6 +67,30 @@ class MainActivity : ComponentActivity() {
                 "light" -> false
                 else -> androidx.compose.foundation.isSystemInDarkTheme()
             }
+            androidx.compose.runtime.LaunchedEffect(darkTheme) {
+                this@MainActivity.enableEdgeToEdge(
+                    statusBarStyle = if (darkTheme) {
+                        androidx.activity.SystemBarStyle.dark(
+                            android.graphics.Color.TRANSPARENT
+                        )
+                    } else {
+                        androidx.activity.SystemBarStyle.light(
+                            android.graphics.Color.TRANSPARENT,
+                            android.graphics.Color.TRANSPARENT
+                        )
+                    },
+                    navigationBarStyle = if (darkTheme) {
+                        androidx.activity.SystemBarStyle.dark(
+                            android.graphics.Color.TRANSPARENT
+                        )
+                    } else {
+                        androidx.activity.SystemBarStyle.light(
+                            android.graphics.Color.TRANSPARENT,
+                            android.graphics.Color.TRANSPARENT
+                        )
+                    }
+                )
+            }
             MyApplicationTheme(
                 darkTheme = darkTheme,
                 dynamicColor = viewModel.isDynamicColorEnabled,
