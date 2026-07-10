@@ -9,8 +9,11 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
@@ -82,6 +85,8 @@ import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Contrast
+import androidx.compose.material.icons.filled.FilterBAndW
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.OpenInFull
@@ -127,6 +132,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.TransformOrigin
@@ -138,6 +145,8 @@ import kotlinx.coroutines.Job
 import kotlin.math.abs
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import androidx.compose.ui.platform.LocalContext
@@ -147,12 +156,16 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.compose.rememberAsyncImagePainter
+import coil.request.ImageRequest
 import com.example.BuildConfig
 import com.example.data.Board
 import com.example.data.CanvasItem
@@ -192,8 +205,14 @@ fun DroidCanvasScreen(
     val isInitialLoadComplete by viewModel.isInitialLoadComplete.collectAsState()
     val canvasItems by viewModel.canvasItems.collectAsState()
     val selectedItemId by viewModel.selectedItemId.collectAsState()
-    val selectedItemIds by viewModel.selectedItemIds.collectAsState()
     val isLoaded by viewModel.isLoaded.collectAsState()
+
+    val themeMode = viewModel.themeMode
+    val darkTheme = when (themeMode) {
+        "dark" -> true
+        "light" -> false
+        else -> androidx.compose.foundation.isSystemInDarkTheme()
+    }
 
     var showCreateBoardDialog by remember { mutableStateOf(false) }
     var newBoardName by remember { mutableStateOf("") }
@@ -450,17 +469,23 @@ fun DroidCanvasScreen(
                                     val effectiveZoom = zoomChange
                                     val centroid = event.calculateCentroid(useCurrent = true)
                                     if (effectiveZoom != 1f || panChange != Offset.Zero) {
-                                        val oldScale = viewModel.canvasScale
-                                        if (!(oldScale >= 10f && effectiveZoom > 1f) && !(oldScale <= 0.01f && effectiveZoom < 1f)) {
-                                            val targetScale = (oldScale * effectiveZoom).coerceIn(0.01f, 10f)
-                                            val effectiveZoomFactor = targetScale / oldScale
-                                            
-                                            viewModel.canvasScale = targetScale
-                                            val centroidCoord = if (centroid != Offset.Unspecified) centroid else down.position
-                                            viewModel.canvasTranslateX =
-                                                (viewModel.canvasTranslateX + panChange.x) * effectiveZoomFactor + centroidCoord.x * (1f - effectiveZoomFactor)
-                                            viewModel.canvasTranslateY =
-                                                (viewModel.canvasTranslateY + panChange.y) * effectiveZoomFactor + centroidCoord.y * (1f - effectiveZoomFactor)
+                                        val centroidCoord = if (centroid != Offset.Unspecified) centroid else down.position
+                                        val zoomRes = CanvasZoomHelper.computeZoom(
+                                            viewModel.canvasScale,
+                                            effectiveZoom,
+                                            panChange.x,
+                                            panChange.y,
+                                            viewModel.canvasTranslateX,
+                                            viewModel.canvasTranslateY,
+                                            centroidCoord.x,
+                                            centroidCoord.y,
+                                            0.01f,
+                                            10f
+                                        )
+                                        if (zoomRes != null) {
+                                            viewModel.canvasScale = zoomRes.nextScale
+                                            viewModel.canvasTranslateX = zoomRes.nextTranslateX
+                                            viewModel.canvasTranslateY = zoomRes.nextTranslateY
                                         }
                                     }
                                     
@@ -493,13 +518,19 @@ fun DroidCanvasScreen(
                                         val dt = (currentTime - lastTime).coerceIn(1L, 50L)
                                         lastTime = currentTime
                                         
-                                        // Decelerate with natural exponential decay
-                                        val decay = Math.pow(0.95, dt.toDouble() / 16.0).toFloat()
-                                        velocityX *= decay
-                                        velocityY *= decay
-                                        
-                                        viewModel.canvasTranslateX += velocityX * (dt / 1000f)
-                                        viewModel.canvasTranslateY += velocityY * (dt / 1000f)
+                                        // Compute decay physics and position updates using Java helper
+                                        val step = CanvasPhysicsHelper.processDecay(
+                                            velocityX,
+                                            velocityY,
+                                            viewModel.canvasTranslateX,
+                                            viewModel.canvasTranslateY,
+                                            dt,
+                                            0.95
+                                        )
+                                        velocityX = step.nextVelocityX
+                                        velocityY = step.nextVelocityY
+                                        viewModel.canvasTranslateX = step.nextTranslateX
+                                        viewModel.canvasTranslateY = step.nextTranslateY
                                     }
                                 }
                             }
@@ -525,7 +556,7 @@ fun DroidCanvasScreen(
                     canvasItems.forEach { item ->
                         CanvasItemView(
                             item = item,
-                            isSelected = selectedItemIds.contains(item.id),
+                            isSelected = selectedItemId == item.id,
                             viewModel = viewModel,
                             globalIsMultiTouch = globalIsMultiTouch,
                             viewportWidth = viewportWidth,
@@ -1132,113 +1163,6 @@ fun DroidCanvasScreen(
                 }
             }
 
-            // Multi-Selection Floating Action Bar
-            AnimatedVisibility(
-                visible = selectedItemIds.size > 1,
-                enter = expandVertically(expandFrom = Alignment.Bottom) + fadeIn(),
-                exit = shrinkVertically(shrinkTowards = Alignment.Bottom) + fadeOut(),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 32.dp, start = 16.dp, end = 16.dp)
-                    .widthIn(max = 500.dp)
-                    .fillMaxWidth()
-            ) {
-                Card(
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
-                    modifier = Modifier.testTag("multi_select_action_bar")
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            IconButton(
-                                onClick = { viewModel.clearSelection() }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Clear selection",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Text(
-                                text = "${selectedItemIds.size} selected",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                        
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            IconButton(
-                                onClick = { viewModel.duplicateSelectedItems() }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.ContentCopy,
-                                    contentDescription = "Duplicate selected",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            
-                            IconButton(
-                                onClick = { viewModel.bringSelectedToFront() }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.FlipToFront,
-                                    contentDescription = "Bring selected to front",
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            
-                            IconButton(
-                                onClick = { viewModel.sendSelectedToBack() }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Layers,
-                                    contentDescription = "Send selected to back",
-                                    tint = MaterialTheme.colorScheme.secondary
-                                )
-                            }
-                            
-                            IconButton(
-                                onClick = { viewModel.togglePinSelectedItems() }
-                            ) {
-                                val currentItems by viewModel.canvasItems.collectAsState()
-                                val isAnyPinned = currentItems.filter { it.id in selectedItemIds }.any { it.isPinned }
-                                Icon(
-                                    imageVector = Icons.Default.PushPin,
-                                    contentDescription = "Pin / Unpin selected",
-                                    tint = if (isAnyPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-                                )
-                            }
-                            
-                            IconButton(
-                                onClick = { viewModel.deleteSelectedItems() }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = "Delete selected",
-                                    tint = MaterialTheme.colorScheme.error
-                                )
-                            }
-                        }
-                    }
-                }
-            }
 
 
         }
@@ -1535,20 +1459,26 @@ fun DroidCanvasScreen(
         )
     }
 
-    // 7. SETTINGS DIALOG (Fullscreen & Organized)
-    if (showSettingsDialog) {
-        Dialog(
-            onDismissRequest = { showSettingsDialog = false },
-            properties = DialogProperties(
-                usePlatformDefaultWidth = false,
-                dismissOnBackPress = true,
-                dismissOnClickOutside = false
-            )
+    // 7. SETTINGS PANEL (Smooth Fullscreen Animated Overlay)
+    AnimatedVisibility(
+        visible = showSettingsDialog,
+        enter = slideInVertically(
+            initialOffsetY = { it },
+            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+        ) + fadeIn(animationSpec = tween(150)),
+        exit = slideOutVertically(
+            targetOffsetY = { it },
+            animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow)
+        ) + fadeOut(animationSpec = tween(150)),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        BackHandler(enabled = showSettingsDialog) {
+            showSettingsDialog = false
+        }
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
         ) {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = MaterialTheme.colorScheme.background
-            ) {
                 Scaffold(
                     topBar = {
                         Row(
@@ -2238,7 +2168,6 @@ fun DroidCanvasScreen(
                 }
             }
         }
-    }
 
 
 
@@ -2334,7 +2263,6 @@ fun CanvasItemView(
 ) {
     val latestItem by rememberUpdatedState(item)
     val canvasScale = if (isSelected) viewModel.canvasScale else 1f
-    val selectedItemIds by viewModel.selectedItemIds.collectAsState()
     val density = LocalDensity.current
     val context = LocalContext.current
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
@@ -2348,6 +2276,13 @@ fun CanvasItemView(
     var localPosY by remember { mutableStateOf(item.posY) }
     var localScale by remember { mutableStateOf(item.scale) }
     var lastTapTime by remember { mutableStateOf(0L) }
+
+    var itemCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var handleCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+
+    var startTouchWindowPos by remember { mutableStateOf(Offset.Zero) }
+    var anchorWindowPos by remember { mutableStateOf(Offset.Zero) }
+    var startScale by remember { mutableStateOf(1f) }
 
     LaunchedEffect(item.posX, item.posY) {
         if (!isDragging) {
@@ -2432,6 +2367,7 @@ fun CanvasItemView(
                 scaleY = totalScale,
                 alpha = entryAlpha
             )
+            .onGloballyPositioned { itemCoordinates = it }
             .testTag("canvas_item_${item.id}")
     ) {
         // Use fullPath always to avoid switching resolution flicker during zoom, using thumbPath as placeholder
@@ -2527,16 +2463,11 @@ fun CanvasItemView(
                                             if (dragActive && !globalIsMultiTouch) {
                                                 dragChange.consume()
                                                 
-                                                // Transform local drag amount to parent (canvas) drag amount
-                                                val rotationRad = Math.toRadians(latestItem.rotation.toDouble())
-                                                val cosVal = Math.cos(rotationRad).toFloat()
-                                                val sinVal = Math.sin(rotationRad).toFloat()
+                                                // Transform local drag amount to parent (canvas) drag amount using Java helper
+                                                val rotatedDrag = CanvasMathHelper.rotateDragAmount(dragAmount.x, dragAmount.y, latestItem.rotation)
                                                 
-                                                val parentDragX = (dragAmount.x * cosVal - dragAmount.y * sinVal)
-                                                val parentDragY = (dragAmount.x * sinVal + dragAmount.y * cosVal)
-                                                
-                                                localPosX += parentDragX
-                                                localPosY += parentDragY
+                                                localPosX += rotatedDrag.posX
+                                                localPosY += rotatedDrag.posY
                                             }
                                         }
                                     }
@@ -2583,12 +2514,22 @@ fun CanvasItemView(
             Box(
                 modifier = Modifier.fillMaxSize()
             ) {
+                // Dynamically load full resolution only when zoomed in, selected, or for animated GIFs, otherwise load fast lightweight thumbnail
+                val isLargeScale = (localScale * viewModel.canvasScale) > 1.2f
+                val shouldLoadFull = isSelected || isLargeScale || item.fullPath.endsWith(".gif", ignoreCase = true)
+                val modelPath = if (shouldLoadFull) item.fullPath else item.thumbPath
+
                 AsyncImage(
-                    model = item.fullPath,
+                    model = ImageRequest.Builder(context)
+                        .data(modelPath)
+                        .crossfade(true)
+                        .allowHardware(true)
+                        .build(),
                     placeholder = thumbnailPainter,
                     error = thumbnailPainter,
                     contentDescription = "Reference reference photo",
                     contentScale = ContentScale.Fit,
+                    colorFilter = if (latestItem.isGrayscale) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) else null,
                     modifier = Modifier
                         .fillMaxSize()
                         .clip(RoundedCornerShape(10.dp))
@@ -2639,16 +2580,15 @@ fun CanvasItemView(
         // Selected handles and gestures on all four corners
         if (isSelected && !latestItem.isPinned) {
             val handleSize = ((28 / canvasScale).dp).coerceIn(20.dp, 36.dp)
-            val halfOffset = handleSize / 2
+            val touchSize = ((56 / canvasScale).dp).coerceIn(44.dp, 64.dp)
+            val halfTouchOffset = touchSize / 2
 
             // 1. Top-Left Handle: Close / Delete with Long Press
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .offset(x = -halfOffset, y = -halfOffset)
-                    .size(handleSize)
-                    .background(Color(0xE6121212), CircleShape)
-                    .border(BorderStroke((1f / canvasScale).dp, Color.White.copy(alpha = 0.9f)), CircleShape)
+                    .offset(x = -halfTouchOffset, y = -halfTouchOffset)
+                    .size(touchSize)
                     .pointerInput(latestItem.id) {
                         detectTapGestures(
                             onTap = {
@@ -2666,22 +2606,28 @@ fun CanvasItemView(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Delete Item",
-                    tint = Color.White,
-                    modifier = Modifier.size(((12 / canvasScale).dp).coerceIn(8.dp, 16.dp))
-                )
+                Box(
+                    modifier = Modifier
+                        .size(handleSize)
+                        .background(Color(0xE6121212), CircleShape)
+                        .border(BorderStroke((1f / canvasScale).dp, Color.White.copy(alpha = 0.9f)), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Delete Item",
+                        tint = Color.White,
+                        modifier = Modifier.size(((12 / canvasScale).dp).coerceIn(8.dp, 16.dp))
+                    )
+                }
             }
 
             // 2. Top-Right Handle: Flip Horizontal
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .offset(x = halfOffset, y = -halfOffset)
-                    .size(handleSize)
-                    .background(Color(0xE6121212), CircleShape)
-                    .border(BorderStroke((1f / canvasScale).dp, Color.White.copy(alpha = 0.9f)), CircleShape)
+                    .offset(x = halfTouchOffset, y = -halfTouchOffset)
+                    .size(touchSize)
                     .clickable {
                         if (viewModel.isHapticEnabled) {
                             try {
@@ -2692,22 +2638,28 @@ fun CanvasItemView(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.Flip,
-                    contentDescription = "Flip Horizontal",
-                    tint = Color.White,
-                    modifier = Modifier.size(((12 / canvasScale).dp).coerceIn(8.dp, 16.dp))
-                )
+                Box(
+                    modifier = Modifier
+                        .size(handleSize)
+                        .background(Color(0xE6121212), CircleShape)
+                        .border(BorderStroke((1f / canvasScale).dp, Color.White.copy(alpha = 0.9f)), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Flip,
+                        contentDescription = "Flip Horizontal",
+                        tint = Color.White,
+                        modifier = Modifier.size(((12 / canvasScale).dp).coerceIn(8.dp, 16.dp))
+                    )
+                }
             }
 
             // 3. Bottom-Left Handle: Flip Vertical
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .offset(x = -halfOffset, y = halfOffset)
-                    .size(handleSize)
-                    .background(Color(0xE6121212), CircleShape)
-                    .border(BorderStroke((1f / canvasScale).dp, Color.White.copy(alpha = 0.9f)), CircleShape)
+                    .offset(x = -halfTouchOffset, y = halfTouchOffset)
+                    .size(touchSize)
                     .clickable {
                         if (viewModel.isHapticEnabled) {
                             try {
@@ -2718,55 +2670,64 @@ fun CanvasItemView(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.Flip,
-                    contentDescription = "Flip Vertical",
-                    tint = Color.White,
+                Box(
                     modifier = Modifier
-                        .size(((12 / canvasScale).dp).coerceIn(8.dp, 16.dp))
-                        .rotate(90f)
-                )
+                        .size(handleSize)
+                        .background(Color(0xE6121212), CircleShape)
+                        .border(BorderStroke((1f / canvasScale).dp, Color.White.copy(alpha = 0.9f)), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Flip,
+                        contentDescription = "Flip Vertical",
+                        tint = Color.White,
+                        modifier = Modifier
+                            .size(((12 / canvasScale).dp).coerceIn(8.dp, 16.dp))
+                            .rotate(90f)
+                    )
+                }
             }
 
             // 4. Bottom-Right Handle: Resize
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .offset(x = halfOffset, y = halfOffset)
-                    .size(handleSize)
-                    .background(Color(0xE6121212), CircleShape)
-                    .border(BorderStroke((1f / canvasScale).dp, Color.White.copy(alpha = 0.9f)), CircleShape)
+                    .offset(x = halfTouchOffset, y = halfTouchOffset)
+                    .size(touchSize)
+                    .onGloballyPositioned { handleCoordinates = it }
                     .pointerInput(latestItem.id) {
                         detectDragGestures(
-                            onDragStart = {
+                            onDragStart = { downOffset ->
+                                startScale = localScale
+                                anchorWindowPos = itemCoordinates?.localToWindow(Offset.Zero) ?: Offset.Zero
+                                startTouchWindowPos = handleCoordinates?.localToWindow(downOffset) ?: Offset.Zero
                                 isDragging = true
                                 isResizing = true
                             },
                             onDrag = { change, dragAmount ->
                                 change.consume()
-                                val dirX = 0.7071f
-                                val dirY = 0.7071f
-                                val projection = dragAmount.x * dirX + dragAmount.y * dirY
-                                val sign = if (projection >= 0f) 1f else -1f
-                                val rawDelta = sign * dragAmount.getDistance()
-                                val scaleMultiplier = rawDelta * 0.005f
-                                val oldScale = localScale
-                                val newScale = (oldScale + scaleMultiplier).coerceIn(0.05f, 10f)
-                                if (newScale != oldScale) {
-                                    val (newPosX, newPosY) = adjustPositionForScale(
-                                        oldScale = oldScale,
-                                        newScale = newScale,
-                                        posX = localPosX,
-                                        posY = localPosY,
-                                        widthPx = displayWidthPx,
-                                        heightPx = displayHeightPx,
-                                        rotationDegrees = latestItem.rotation,
-                                        u = -0.5f,
-                                        v = -0.5f
-                                    )
-                                    localPosX = newPosX
-                                    localPosY = newPosY
-                                    localScale = newScale
+                                val currentTouchWindowPos = handleCoordinates?.localToWindow(change.position) ?: Offset.Zero
+                                val startDist = CanvasMathHelper.calculateDistance(startTouchWindowPos.x, startTouchWindowPos.y, anchorWindowPos.x, anchorWindowPos.y)
+                                val currentDist = CanvasMathHelper.calculateDistance(currentTouchWindowPos.x, currentTouchWindowPos.y, anchorWindowPos.x, anchorWindowPos.y)
+                                if (startDist > 0.1f) {
+                                    val oldScale = localScale
+                                    val newScale = CanvasMathHelper.calculateNewScale(startScale, startDist, currentDist, 0.05f, 10f)
+                                    if (newScale != oldScale) {
+                                        val (newPosX, newPosY) = adjustPositionForScale(
+                                            oldScale = oldScale,
+                                            newScale = newScale,
+                                            posX = localPosX,
+                                            posY = localPosY,
+                                            widthPx = displayWidthPx,
+                                            heightPx = displayHeightPx,
+                                            rotationDegrees = latestItem.rotation,
+                                            u = -0.5f,
+                                            v = -0.5f
+                                        )
+                                        localPosX = newPosX
+                                        localPosY = newPosY
+                                        localScale = newScale
+                                    }
                                 }
                             },
                             onDragEnd = {
@@ -2783,12 +2744,20 @@ fun CanvasItemView(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.OpenInFull,
-                    contentDescription = "Resize Bottom Right",
-                    tint = Color.White,
-                    modifier = Modifier.size(((12 / canvasScale).dp).coerceIn(8.dp, 16.dp))
-                )
+                Box(
+                    modifier = Modifier
+                        .size(handleSize)
+                        .background(Color(0xE6121212), CircleShape)
+                        .border(BorderStroke((1f / canvasScale).dp, Color.White.copy(alpha = 0.9f)), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.OpenInFull,
+                        contentDescription = "Resize Bottom Right",
+                        tint = Color.White,
+                        modifier = Modifier.size(((12 / canvasScale).dp).coerceIn(8.dp, 16.dp))
+                    )
+                }
             }
         }
 
@@ -2797,56 +2766,22 @@ fun CanvasItemView(
             expanded = isLongPressMenuExpanded,
             onDismissRequest = { isLongPressMenuExpanded = false },
             modifier = Modifier
+                .width(240.dp)
+                .clip(RoundedCornerShape(20.dp))
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)), shape = RoundedCornerShape(12.dp))
+                .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)), shape = RoundedCornerShape(20.dp))
         ) {
-            val isItemCurrentlySelected = selectedItemIds.contains(item.id)
-            DropdownMenuItem(
-                text = { Text(if (isItemCurrentlySelected) "Deselect" else "Select / Multi-Select", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) },
-                leadingIcon = {
-                    Icon(
-                        imageVector = if (isItemCurrentlySelected) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
-                        contentDescription = "Toggle selection",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                },
-                onClick = {
-                    viewModel.toggleItemSelection(item.id)
-                    isLongPressMenuExpanded = false
-                }
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-                    .height(1.dp)
-                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+            // Section 1: Workspace
+            Text(
+                text = "WORKSPACE",
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp
             )
             DropdownMenuItem(
-                text = { Text(if (latestItem.isPinned) "Unpin Item" else "Pin Item", fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface) },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.PushPin,
-                        contentDescription = "Pin item",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                },
-                onClick = {
-                    viewModel.togglePinItem(latestItem)
-                    isLongPressMenuExpanded = false
-                }
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-                    .height(1.dp)
-                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-            )
-            DropdownMenuItem(
-                text = { Text("Duplicate", fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface) },
+                text = { Text("Duplicate", fontWeight = FontWeight.Medium, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface) },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.ContentCopy,
@@ -2860,8 +2795,74 @@ fun CanvasItemView(
                     isLongPressMenuExpanded = false
                 }
             )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp, horizontal = 12.dp)
+                    .height(1.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+            )
+
+            // Section 2: Study Tools
+            Text(
+                text = "STUDY TOOLS",
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 4.dp),
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp
+            )
             DropdownMenuItem(
-                text = { Text("Bring to Front", fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface) },
+                text = { Text(if (latestItem.isPinned) "Unpin Reference" else "Pin Reference", fontWeight = FontWeight.Medium, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.PushPin,
+                        contentDescription = "Pin item",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                },
+                onClick = {
+                    viewModel.togglePinItem(latestItem)
+                    isLongPressMenuExpanded = false
+                }
+            )
+            DropdownMenuItem(
+                text = { Text(if (latestItem.isGrayscale) "Show in Color" else "Study Values (Grayscale)", fontWeight = FontWeight.Medium, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Contrast,
+                        contentDescription = "Toggle Grayscale",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                },
+                onClick = {
+                    viewModel.toggleGrayscale(latestItem)
+                    isLongPressMenuExpanded = false
+                }
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp, horizontal = 12.dp)
+                    .height(1.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+            )
+
+            // Section 3: Arrangement
+            Text(
+                text = "ARRANGEMENT",
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 4.dp),
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp
+            )
+            DropdownMenuItem(
+                text = { Text("Bring to Front", fontWeight = FontWeight.Medium, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface) },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.FlipToFront,
@@ -2876,7 +2877,7 @@ fun CanvasItemView(
                 }
             )
             DropdownMenuItem(
-                text = { Text("Send to Back", fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface) },
+                text = { Text("Send to Back", fontWeight = FontWeight.Medium, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface) },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Layers,
@@ -2891,17 +2892,17 @@ fun CanvasItemView(
                 }
             )
             
-            // Subtle horizontal divider to separate critical/dangerous actions
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp)
+                    .padding(vertical = 4.dp, horizontal = 12.dp)
                     .height(1.dp)
                     .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
             )
             
+            // Section 4: Critical Action
             DropdownMenuItem(
-                text = { Text("Delete", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error) },
+                text = { Text("Delete Reference", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.error) },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Delete,
