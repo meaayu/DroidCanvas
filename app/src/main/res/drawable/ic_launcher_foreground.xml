@@ -4,52 +4,46 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- 1. Back Reference Card (Cyan Accent, translucent) -->
-    <path
-        android:fillColor="#38BDF8"
-        android:fillAlpha="0.6"
-        android:pathData="M 38,32 L 64,32 A 6,6 0 0 1 70,38 L 70,64 A 6,6 0 0 1 64,70 L 38,70 A 6,6 0 0 1 32,64 L 32,38 A 6,6 0 0 1 38,32 Z" />
-
-    <!-- 2. Front Reference Card (Solid White, high-contrast) -->
+    <!-- 1. Centered Reference Card (Solid White, high-contrast) -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M 50,44 L 78,44 A 6,6 0 0 1 84,50 L 84,78 A 6,6 0 0 1 78,84 L 50,84 A 6,6 0 0 1 44,78 L 44,50 A 6,6 0 0 1 50,44 Z" />
+        android:pathData="M 37,38 L 71,38 A 6,6 0 0 1 77,44 L 77,78 A 6,6 0 0 1 71,84 L 37,84 A 6,6 0 0 1 31,78 L 31,44 A 6,6 0 0 1 37,38 Z" />
 
-    <!-- 3. Inner Landscape details inside Front Card -->
-    <!-- Left Mountain -->
+    <!-- 2. Landscape details inside Card (flush with bottom Y=84) -->
+    <!-- Left/Back Mountain -->
     <path
         android:fillColor="#818CF8"
-        android:pathData="M 48,80 L 58,62 L 68,80 Z" />
+        android:pathData="M 38,84 L 54,55 L 70,84 Z" />
 
-    <!-- Right Mountain -->
+    <!-- Right/Front Mountain -->
     <path
         android:fillColor="#4F46E5"
-        android:pathData="M 62,80 L 70,68 L 78,80 Z" />
+        android:pathData="M 52,84 L 61,65 L 70,84 Z" />
 
     <!-- Sun inside card -->
     <path
         android:fillColor="#F59E0B"
-        android:pathData="M 72,54 A 3.5,3.5 0 1 1 71.99,54 Z" />
+        android:pathData="M 63,45.5 A 3.5,3.5 0 1 1 63,52.5 A 3.5,3.5 0 1 1 63,45.5 Z" />
 
-    <!-- 4. Thumbtack / Pushpin (representing the Board/Canvas theme) -->
-    <!-- Metal needle -->
+    <!-- 3. Minimal Centered Thumbtack / Pushpin -->
+    <!-- Metal needle pointing to (54, 38) -->
     <path
         android:fillColor="#94A3B8"
-        android:pathData="M 53.5,29 L 54.5,29 L 54,39 Z" />
+        android:pathData="M 53.5,32 L 54.5,32 L 54,38 Z" />
 
     <!-- Pin flange -->
     <path
-        android:fillColor="#DC2626"
-        android:pathData="M 51,27 L 57,27 L 57,29 L 51,29 Z" />
+        android:fillColor="#EF4444"
+        android:pathData="M 51,30 L 57,30 L 57,32 L 51,32 Z" />
 
     <!-- Pin body grip -->
     <path
-        android:fillColor="#EF4444"
-        android:pathData="M 52.5,23 L 55.5,23 L 55,27 L 53,27 Z" />
+        android:fillColor="#DC2626"
+        android:pathData="M 52.5,26 L 55.5,26 L 55,30 L 53,30 Z" />
 
     <!-- Pin top head -->
     <path
         android:fillColor="#EF4444"
-        android:pathData="M 54,23 A 2.5,2.5 0 1 1 53.99,23 Z" />
+        android:pathData="M 54,23 A 2,2 0 1 1 54,27 A 2,2 0 1 1 54,23 Z" />
 
 </vector>
