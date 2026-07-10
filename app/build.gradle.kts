@@ -39,7 +39,7 @@ android {
       keyAlias = "androiddebugkey"
       keyPassword = "android"
     }
-
+}
 
   buildTypes {
     release {
