@@ -8,73 +8,34 @@
 ![Kotlin](https://img.shields.io/badge/Kotlin-7F52FF?logo=kotlin&logoColor=white)
 ![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4?logo=jetpackcompose&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Status](https://img.shields.io/badge/status-early%20development-orange)
 
-[📥 Download APK](#installation) • [🚀 Quick Start](#quick-start) • [✨ Features](#features) • [🛣️ Roadmap](#roadmap) • [🤝 Contribute](#contributing)
+[📥 Download APK](https://github.com/meaayu/DroidCanvas/releases/latest) • [🚀 Quick Start](#quick-start) • [🛣️ Roadmap](#roadmap) • [🤝 Contribute](#contributing)
 
 </div>
 
 ---
 
-## 💡 About
+## About
 
-DroidCanvas is your creative companion for organizing visual references. Inspired by desktop tools like PureRef, it brings a professional reference board experience directly to your Android device.
-
-**Why DroidCanvas?**
-- ✅ **Privacy First** — No accounts, no cloud lock-in. Everything stays on your device
-- ✅ **Intuitive** — Familiar gestures and controls from day one
-- ✅ **Powerful** — Transform and arrange references with pixel-perfect precision
-- ✅ **Reliable** — Your work is automatically saved and always there when you need it
+DroidCanvas brings a professional reference board experience directly to your Android device. Organize visual references with an infinite canvas, precise controls, and automatic saving — no account required.
 
 ---
 
 ## ✨ Features
 
-<table>
-  <tr>
-    <td width="50%">
-      
-### 🌌 Infinite Workspace
-Pan and zoom freely without borders or limits. Create boards as large as your imagination.
-
-### 👌 Precise Manipulation
-- Drag to reposition
-- Pinch to scale
-- Rotate with natural gestures
-- Corner handles for pixel-perfect control
-
-### 💾 Automatic Persistence
-Canvas state and all placements saved locally via Room database. Pick up exactly where you left off.
-
-### 📱 Modern UI
-Built with Jetpack Compose & Material 3. Supports dynamic dark theming and edge-to-edge rendering.
-
-### 🔄 In-App Updates
-Automatically checks GitHub Releases for new versions. One-tap installation from settings.
-
-### 🎭 Creative Tools
-- Grayscale toggle
-- Flip horizontal/vertical
-- Animated GIF support
-- Auto-arrange on import
-- Multi-image batch import
-
-    </td>
-  </tr>
-</table>
+- 🌌 **Infinite Workspace** — Pan and zoom freely without limits
+- 👌 **Precise Manipulation** — Drag, pinch, rotate with pixel-perfect control
+- 💾 **Auto-Save** — All changes saved locally via Room database
+- 📱 **Modern UI** — Built with Jetpack Compose & Material 3
+- 🎭 **Creative Tools** — Grayscale, flip, GIF support, batch import
 
 ---
 
 ## 🚀 Quick Start
 
-### Installation
-
 **Option 1: Download APK**
-```
-1. Visit GitHub Releases
-2. Download the latest APK
-3. Install on your Android device (API 26+)
-```
+- Visit [GitHub Releases](https://github.com/meaayu/DroidCanvas/releases/latest)
+- Download and install (requires Android 8.0+)
 
 **Option 2: Build from Source**
 ```bash
@@ -83,92 +44,30 @@ cd DroidCanvas
 ./gradlew assembleDebug
 ```
 
-**Requirements:** Android 8.0 (API 26) or higher
-
-### Getting Started
-1. **Import** — Tap to load images from your gallery
-2. **Arrange** — Drag, rotate, and scale references to your liking
-3. **Save** — Changes are saved automatically to your device
-
----
-
-## 🏗️ Architecture
-
-| Component | Technology |
-|-----------|-----------|
-| **Language** | Kotlin |
-| **UI Framework** | Jetpack Compose |
-| **Design System** | Material 3 |
-| **Database** | Room (SQLite) |
-| **Pattern** | Single-activity, Composable-based |
-
 ---
 
 ## 🛣️ Roadmap
 
-### ✅ Completed
-- [x] Grayscale toggle
-- [x] Flip transformations (horizontal/vertical)
-- [x] Animated GIF support
-- [x] Auto-arrange & packing on import
-- [x] Multi-image import
+**Completed:** Grayscale toggle, Flip transformations, Animated GIF support, Auto-arrange, Multi-image import
 
-### 🔨 In Development
-- [ ] Crop tool
-- [ ] Board templates
-- [ ] Layer groups
-- [ ] Export to image
-- [ ] Gesture customization
+**In Progress:** Crop tool, Board templates, Layer groups, Export to image
 
-### 💭 Under Consideration
-- [ ] Tablet optimization
-- [ ] Keyboard shortcuts
-- [ ] Undo/Redo
-- [ ] Cloud sync (optional)
-
-**Have a feature idea?** [Open an issue](https://github.com/meaayu/DroidCanvas/issues/new) and let us know!
+**Planned:** Tablet optimization, Keyboard shortcuts, Undo/Redo
 
 ---
 
 ## 🤝 Contributing
 
-We'd love your help! Whether it's code, bug reports, or feature ideas — all contributions matter.
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Commit your changes: `git commit -m 'Add amazing feature'`
+4. Push and open a Pull Request
 
-### How to Contribute
-1. **Fork** the repository
-2. **Create** a feature branch: `git checkout -b feature/amazing-feature`
-3. **Commit** your changes: `git commit -m 'Add amazing feature'`
-4. **Push** to your branch: `git push origin feature/amazing-feature`
-5. **Open** a Pull Request
-
-### Development Setup
-- Android Studio Giraffe or newer
-- Kotlin 1.9+
-- Minimum SDK: API 26
-- Target SDK: API 35 (or latest)
+**Requirements:** Android Studio, Kotlin 1.9+, API 26+
 
 ---
 
 ## 📝 License
 
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for full details.
+MIT License — see [LICENSE](LICENSE) file
 
----
-
-## 🙏 Acknowledgments
-
-Built with ❤️ using:
-- **Kotlin** — for expressive, safe code
-- **Jetpack Compose** — for modern Android UI
-- **Material Design 3** — for beautiful, consistent design
-- **Open-source community** — for amazing libraries and inspiration
-
----
-
-<div align="center">
-
-**Questions?** Open an issue or start a discussion!
-
-[⬆ Back to Top](#-droidcanvas)
-
-</div>
