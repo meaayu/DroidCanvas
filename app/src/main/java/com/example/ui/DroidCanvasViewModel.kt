@@ -353,39 +353,58 @@ class DroidCanvasViewModel(
     init {
         // Initialize with default board if none exists
         viewModelScope.launch {
-            // 1. Clean up duplicate "Main Board"s from previous default board creation bug
+            // 1. Clean up empty "Main Board"s and duplicate "Main Board"s from previous default board creation
             val initialBoards = repository.allBoards.first()
-            val mainBoards = initialBoards.filter { it.name == "Main Board" }
+            for (b in initialBoards) {
+                if (b.name == "Main Board") {
+                    try {
+                        val items = repository.getItemsForBoard(b.id).first()
+                        if (items.isEmpty()) {
+                            repository.deleteBoard(b)
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error checking or deleting empty board: ${b.id}", e)
+                    }
+                }
+            }
+
+            val boardsAfterClean = repository.allBoards.first()
+            val mainBoards = boardsAfterClean.filter { it.name == "Main Board" }
             if (mainBoards.size > 1) {
                 // Keep the first one, delete the rest to fix the database for existing users
                 val keepBoard = mainBoards.first()
                 val toDelete = mainBoards.drop(1)
                 for (b in toDelete) {
-                    repository.deleteBoard(b)
+                    try {
+                        repository.deleteBoard(b)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error deleting duplicate board: ${b.id}", e)
+                    }
                 }
             }
 
             // 2. Refresh board state after clean up and load initial board
             val cleanedBoards = repository.allBoards.first()
             val initialBoardId = if (cleanedBoards.isEmpty()) {
-                val defaultBoardId = repository.insertBoard(Board(name = "Main Board"))
-                defaultBoardId.toInt()
+                null
             } else {
                 val otherBoardsExist = cleanedBoards.any { it.name.trim().lowercase() != "main board" }
                 if (otherBoardsExist) {
-                    cleanedBoards.first { it.name.trim().lowercase() != "main board" }.id
+                    cleanedBoards.firstOrNull { it.name.trim().lowercase() != "main board" }?.id
                 } else {
-                    cleanedBoards.first().id
+                    cleanedBoards.firstOrNull()?.id
                 }
             }
 
             setCurrentBoardId(initialBoardId)
 
-            // Pre-load items to verify load completion state
-            try {
-                repository.getItemsForBoard(initialBoardId).first()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error loading initial canvas items", e)
+            if (initialBoardId != null) {
+                // Pre-load items to verify load completion state
+                try {
+                    repository.getItemsForBoard(initialBoardId).first()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error loading initial canvas items", e)
+                }
             }
 
             _isInitialLoadComplete.value = true
@@ -599,9 +618,17 @@ class DroidCanvasViewModel(
      * Places them at the current viewport center.
      */
     fun addImages(context: Context, uris: List<Uri>, viewportWidthPx: Float = 1000f, viewportHeightPx: Float = 1000f) {
-        val boardId = _currentBoardId.value ?: return
-        saveCurrentStateToUndo()
         viewModelScope.launch(Dispatchers.IO) {
+            var boardId = _currentBoardId.value
+            if (boardId == null) {
+                // Automatically create a board if none exists
+                val newBoardId = repository.insertBoard(Board(name = "Main Board"))
+                boardId = newBoardId.toInt()
+                withContext(Dispatchers.Main) {
+                    setCurrentBoardId(boardId)
+                }
+            }
+            saveCurrentStateToUndo()
             // Calculate center of screen in canvas space
             // screen_center = (canvas_center - translation) / scale
             val centerXPx = (viewportWidthPx / 2f - canvasTranslateX) / canvasScale

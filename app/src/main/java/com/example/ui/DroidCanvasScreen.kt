@@ -189,6 +189,7 @@ fun DroidCanvasScreen(
         boards
     }
     val activeBoardId by viewModel.currentBoardId.collectAsState()
+    val isInitialLoadComplete by viewModel.isInitialLoadComplete.collectAsState()
     val canvasItems by viewModel.canvasItems.collectAsState()
     val selectedItemId by viewModel.selectedItemId.collectAsState()
     val selectedItemIds by viewModel.selectedItemIds.collectAsState()
@@ -535,7 +536,7 @@ fun DroidCanvasScreen(
             }
 
             // 3. EMPTY STATE ILLUSTRATION
-            if (isLoaded && canvasItems.isEmpty()) {
+            if ((isLoaded && canvasItems.isEmpty()) || boards.isEmpty()) {
                 Card(
                     modifier = Modifier
                         .align(Alignment.Center)
