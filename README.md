@@ -56,7 +56,7 @@ cd DroidCanvas
 - [x] Multi-image import
 - [x] Undo/Redo
 
-**Incompleted**
+**Incompleted:**
 - [ ] Crop tool
 - [ ] Export to image
 - [ ] Tablet optimization
