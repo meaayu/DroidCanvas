@@ -12,6 +12,10 @@ jobs:
     name: Build Test APK
     runs-on: ubuntu-latest
 
+    # Make the secret available to all steps inside this job via an environment variable
+    env:
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -41,12 +45,12 @@ jobs:
           retention-days: 7
 
       - name: Decode Keystore
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        if: ${{ env.HAS_KEYSTORE != '' }}
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > ${{ github.workspace }}/release.jks
 
       - name: Build Signed Release APK
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        if: ${{ env.HAS_KEYSTORE != '' }}
         run: ./gradlew assembleRelease --stacktrace
         env:
           ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/release.jks
@@ -55,7 +59,7 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
       - name: Upload Signed Release APK Artifact
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        if: ${{ env.HAS_KEYSTORE != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
