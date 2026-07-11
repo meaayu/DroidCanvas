@@ -9,7 +9,7 @@
 ![Jetpack Compose](https://img.shields.io/badge/UI-Jetpack%20Compose-4285F4?logo=jetpackcompose&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
-[📥 Download APK](https://github.com/meaayu/DroidCanvas/releases/latest) • [🚀 Quick Start](#quick-start) • [🛣️ Roadmap](#roadmap) • [🤝 Contribute](#contributing)
+[📥 Download APK](https://github.com/meaayu/DroidCanvas/releases/latest)
 
 </div>
 
