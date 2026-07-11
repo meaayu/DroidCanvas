@@ -39,10 +39,13 @@ import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -137,6 +140,11 @@ import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -204,8 +212,10 @@ fun DroidCanvasScreen(
     val activeBoardId by viewModel.currentBoardId.collectAsState()
     val isInitialLoadComplete by viewModel.isInitialLoadComplete.collectAsState()
     val canvasItems by viewModel.canvasItems.collectAsState()
+    val drawingStrokes by viewModel.drawingStrokes.collectAsState()
     val selectedItemId by viewModel.selectedItemId.collectAsState()
     val isLoaded by viewModel.isLoaded.collectAsState()
+    val isDrawModeEnabled = viewModel.isDrawModeEnabled
 
     val themeMode = viewModel.themeMode
     val darkTheme = when (themeMode) {
@@ -286,14 +296,53 @@ fun DroidCanvasScreen(
         val gridDotColor = primaryColor.copy(alpha = 0.08f)
         val slateBackgroundColor = MaterialTheme.colorScheme.background
         val slateGridDotColor = primaryColor.copy(alpha = 0.38f)
-        Box(
+
+        var isSidebarExpanded by remember { mutableStateOf(true) }
+
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .onSizeChanged { size ->
-                    viewportWidth = size.width.toFloat()
-                    viewportHeight = size.height.toFloat()
+                .padding(bottom = innerPadding.calculateBottomPadding())
+        ) {
+            val isWideScreen = maxWidth >= 720.dp
+
+            Row(modifier = Modifier.fillMaxSize()) {
+                if (isWideScreen && isSidebarExpanded) {
+                    SidebarContent(
+                        viewModel = viewModel,
+                        viewportWidth = viewportWidth,
+                        viewportHeight = viewportHeight,
+                        density = density.density,
+                        pickerLauncher = pickerLauncher,
+                        onCloseSidebar = { isSidebarExpanded = false },
+                        onCreateBoardClick = { showCreateBoardDialog = true },
+                        onRenameBoardClick = { b ->
+                            renamingBoard = b
+                            renamingBoardName = b.name
+                        },
+                        onManageBoardsClick = { showManageBoardsDialog = true },
+                        modifier = Modifier
+                            .width(300.dp)
+                            .fillMaxHeight()
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(1.dp)
+                            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                    )
                 }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .background(slateBackgroundColor)
+                        .onSizeChanged { size ->
+                            viewportWidth = size.width.toFloat()
+                            viewportHeight = size.height.toFloat()
+                        }
                 .pointerInput(Unit) {
                     awaitPointerEventScope {
                         while (true) {
@@ -563,6 +612,51 @@ fun DroidCanvasScreen(
                             viewportHeight = viewportHeight
                         )
                     }
+
+                    // Render completed and active drawing strokes
+                    val drawingStrokes by viewModel.drawingStrokes.collectAsState()
+                    val activeStroke = viewModel.activeStroke
+                    
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        drawingStrokes.forEach { stroke ->
+                            val path = Path().apply {
+                                if (stroke.points.isNotEmpty()) {
+                                    moveTo(stroke.points.first().x, stroke.points.first().y)
+                                    for (i in 1 until stroke.points.size) {
+                                        lineTo(stroke.points[i].x, stroke.points[i].y)
+                                    }
+                                }
+                            }
+                            drawPath(
+                                path = path,
+                                color = Color(stroke.color),
+                                style = Stroke(
+                                    width = stroke.strokeWidth,
+                                    cap = StrokeCap.Round,
+                                    join = StrokeJoin.Round
+                                )
+                            )
+                        }
+                        activeStroke?.let { stroke ->
+                            val path = Path().apply {
+                                if (stroke.points.isNotEmpty()) {
+                                    moveTo(stroke.points.first().x, stroke.points.first().y)
+                                    for (i in 1 until stroke.points.size) {
+                                        lineTo(stroke.points[i].x, stroke.points[i].y)
+                                    }
+                                }
+                            }
+                            drawPath(
+                                path = path,
+                                color = Color(stroke.color),
+                                style = Stroke(
+                                    width = stroke.strokeWidth,
+                                    cap = StrokeCap.Round,
+                                    join = StrokeJoin.Round
+                                )
+                            )
+                        }
+                    }
                 }
             }
 
@@ -697,6 +791,76 @@ fun DroidCanvasScreen(
                 }
             }
 
+            // 3. DRAWING OVERLAY TO CAPTURE SINGLE TOUCHES WHEN DRAW MODE IS ACTIVE
+            if (isDrawModeEnabled) {
+                val isEraserModeEnabled = viewModel.isEraserModeEnabled
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(isEraserModeEnabled) {
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                
+                                val startCanvasPoint = Offset(
+                                    (down.position.x - viewModel.canvasTranslateX) / viewModel.canvasScale,
+                                    (down.position.y - viewModel.canvasTranslateY) / viewModel.canvasScale
+                                )
+                                
+                                if (isEraserModeEnabled) {
+                                    viewModel.eraseStrokeAt(startCanvasPoint)
+                                } else {
+                                    viewModel.startNewStroke(startCanvasPoint)
+                                }
+                                down.consume()
+                                
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val activeChanges = event.changes.filter { it.pressed }
+                                    if (activeChanges.isEmpty()) {
+                                        if (!isEraserModeEnabled) {
+                                            viewModel.finishActiveStroke()
+                                        }
+                                        break
+                                    }
+                                    
+                                    if (event.changes.size > 1) {
+                                        if (!isEraserModeEnabled) {
+                                            viewModel.finishActiveStroke()
+                                        }
+                                        break
+                                    }
+                                    
+                                    val change = activeChanges.first()
+                                    val canvasPoint = Offset(
+                                        (change.position.x - viewModel.canvasTranslateX) / viewModel.canvasScale,
+                                        (change.position.y - viewModel.canvasTranslateY) / viewModel.canvasScale
+                                    )
+                                    
+                                    if (isEraserModeEnabled) {
+                                        viewModel.eraseStrokeAt(canvasPoint)
+                                    } else {
+                                        viewModel.appendPointToActiveStroke(canvasPoint)
+                                    }
+                                    change.consume()
+                                }
+                            }
+                        }
+                )
+            }
+
+            // 3.5. DRAWING TOOLBAR (Floating at bottom center when draw mode is active)
+            androidx.compose.animation.AnimatedVisibility(
+                visible = isDrawModeEnabled,
+                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = 80.dp) // Offset above the Add Images FAB so they don't overlap!
+            ) {
+                DrawingToolbar(viewModel = viewModel)
+            }
+
             // 4. UNIFIED CONTROL PANEL (Board Switcher, Zoom, Settings, Multi-select, Arrange)
             var showArrangeMenu by remember { mutableStateOf(false) }
             var controlPanelVisible by remember { mutableStateOf(false) }
@@ -765,6 +929,32 @@ fun DroidCanvasScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        if (isWideScreen) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isSidebarExpanded) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isSidebarExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                                ),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { isSidebarExpanded = !isSidebarExpanded }
+                                    .testTag("toggle_sidebar_button")
+                            ) {
+                                Box(
+                                    modifier = Modifier.padding(8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (isSidebarExpanded) Icons.Default.Close else Icons.Default.Layers,
+                                        contentDescription = "Toggle Sidebar",
+                                        tint = if (isSidebarExpanded) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
                         // Board selection capsule
                         Surface(
                             shape = RoundedCornerShape(12.dp),
@@ -903,6 +1093,33 @@ fun DroidCanvasScreen(
                             }
                         }
 
+                        // Draw Mode Toggle Button
+                        val isDrawModeEnabled = viewModel.isDrawModeEnabled
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isDrawModeEnabled) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+                            border = BorderStroke(
+                                1.dp,
+                                if (isDrawModeEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                            ),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { viewModel.isDrawModeEnabled = !isDrawModeEnabled }
+                                .testTag("draw_mode_toggle_button")
+                        ) {
+                            Box(
+                                modifier = Modifier.padding(8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.Edit,
+                                    contentDescription = "Draw Mode",
+                                    tint = if (isDrawModeEnabled) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+
                         // Overflow (⋯) Button
                         Surface(
                             shape = RoundedCornerShape(12.dp),
@@ -958,8 +1175,8 @@ fun DroidCanvasScreen(
 
                     // Secondary Toolbar: (Arrange, Lock Board, Undo, Redo)
                     // Visible only in populated state (when board has content) AND when overflow is toggled.
-                    AnimatedVisibility(
-                        visible = canvasItems.isNotEmpty() && isOverflowToggled,
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = (canvasItems.isNotEmpty() || drawingStrokes.isNotEmpty()) && isOverflowToggled,
                         enter = expandVertically(
                             animationSpec = spring(
                                 dampingRatio = Spring.DampingRatioNoBouncy,
@@ -1165,6 +1382,8 @@ fun DroidCanvasScreen(
 
 
 
+                }
+            }
         }
     }
 
@@ -2937,3 +3156,762 @@ private data class BackgroundOption(
     val desc: String,
     val previewColor: Color
 )
+
+@Composable
+fun DrawingToolbar(
+    viewModel: DroidCanvasViewModel,
+    modifier: Modifier = Modifier
+) {
+    val isEraserMode = viewModel.isEraserModeEnabled
+    val currentWidth = viewModel.drawingWidth
+    val currentColor = viewModel.drawingColor
+    
+    Card(
+        modifier = modifier
+            .padding(16.dp)
+            .shadow(12.dp, shape = RoundedCornerShape(20.dp)),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f)
+        ),
+        border = BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Pen button
+                IconButton(
+                    onClick = { viewModel.isEraserModeEnabled = false },
+                    colors = IconButtonDefaults.iconButtonColors(
+                        containerColor = if (!isEraserMode) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                        contentColor = if (!isEraserMode) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Pen Tool"
+                    )
+                }
+                
+                // Eraser button
+                IconButton(
+                    onClick = { viewModel.isEraserModeEnabled = true },
+                    colors = IconButtonDefaults.iconButtonColors(
+                        containerColor = if (isEraserMode) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                        contentColor = if (isEraserMode) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Contrast,
+                        contentDescription = "Eraser Tool"
+                    )
+                }
+                
+                // Vertical divider
+                Box(
+                    modifier = Modifier
+                        .height(24.dp)
+                        .width(1.dp)
+                        .background(MaterialTheme.colorScheme.outlineVariant)
+                )
+                
+                // Color presets
+                val colors = listOf(
+                    0xFFF44336.toInt(), // Red
+                    0xFFFFEB3B.toInt(), // Yellow
+                    0xFF2196F3.toInt(), // Blue
+                    0xFF4CAF50.toInt(), // Green
+                    0xFF000000.toInt(), // Black
+                    0xFFFFFFFF.toInt()  // White
+                )
+                
+                colors.forEach { colorInt ->
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(Color(colorInt))
+                            .border(
+                                width = if (currentColor == colorInt) 3.dp else 1.dp,
+                                color = if (currentColor == colorInt) {
+                                    if (colorInt == 0xFFFFFFFF.toInt()) Color.Black else MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                                },
+                                shape = CircleShape
+                            )
+                            .clickable {
+                                viewModel.drawingColor = colorInt
+                                viewModel.isEraserModeEnabled = false
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (currentColor == colorInt) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Selected",
+                                tint = if (colorInt == 0xFFFFEB3B.toInt() || colorInt == 0xFFFFFFFF.toInt()) Color.Black else Color.White,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                }
+                
+                // Vertical divider
+                Box(
+                    modifier = Modifier
+                        .height(24.dp)
+                        .width(1.dp)
+                        .background(MaterialTheme.colorScheme.outlineVariant)
+                )
+                
+                // Clear drawings button
+                IconButton(
+                    onClick = { viewModel.clearDrawingStrokes() },
+                    colors = IconButtonDefaults.iconButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Clear Drawings"
+                    )
+                }
+            }
+            
+            // Stroke width slider
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+            ) {
+                Text(
+                    text = "Size",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Slider(
+                    value = currentWidth,
+                    onValueChange = { viewModel.drawingWidth = it },
+                    valueRange = 2f..40f,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = "${currentWidth.roundToInt()}px",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.width(36.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun SidebarContent(
+    viewModel: DroidCanvasViewModel,
+    viewportWidth: Float,
+    viewportHeight: Float,
+    density: Float,
+    pickerLauncher: androidx.activity.result.ActivityResultLauncher<androidx.activity.result.PickVisualMediaRequest>,
+    onCloseSidebar: () -> Unit,
+    onCreateBoardClick: () -> Unit,
+    onRenameBoardClick: (Board) -> Unit,
+    onManageBoardsClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val boards by viewModel.boards.collectAsState()
+    val otherBoardsExist = boards.any { it.name.trim().lowercase() != "main board" }
+    val visibleBoards = if (otherBoardsExist) {
+        boards.filter { it.name.trim().lowercase() != "main board" }
+    } else {
+        boards
+    }
+    val activeBoardId by viewModel.currentBoardId.collectAsState()
+    val canvasItems by viewModel.canvasItems.collectAsState()
+    val isDrawModeEnabled = viewModel.isDrawModeEnabled
+    val currentWidth = viewModel.drawingWidth
+    val currentColor = viewModel.drawingColor
+    val isEraserModeEnabled = viewModel.isEraserModeEnabled
+
+    Column(
+        modifier = modifier
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // 1. Sidebar Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = "DroidCanvas Pro",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "Workspace Panel",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
+            }
+            IconButton(
+                onClick = onCloseSidebar,
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Collapse Sidebar",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        // Divider
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+        )
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            // Section 2: Workspace Boards (Quick Selection List)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "WORKSPACES",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+
+                    IconButton(
+                        onClick = onCreateBoardClick,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "New Workspace",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    visibleBoards.forEach { board ->
+                        val isActive = board.id == activeBoardId
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+                            border = BorderStroke(
+                                1.dp,
+                                if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { viewModel.selectBoard(board.id) }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isActive) Icons.Default.Check else Icons.Default.Folder,
+                                        contentDescription = null,
+                                        tint = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = board.name,
+                                        color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                }
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    IconButton(
+                                        onClick = { onRenameBoardClick(board) },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = "Rename Board",
+                                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                    if (visibleBoards.size > 1) {
+                                        IconButton(
+                                            onClick = { viewModel.deleteBoard(board) },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = "Delete Board",
+                                                tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Divider
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
+            )
+
+            // Section 3: Reference Images (Layers)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "IMAGES ON BOARD (${canvasItems.size})",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+                    IconButton(
+                        onClick = {
+                            pickerLauncher.launch(
+                                androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Import Images",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+
+                if (canvasItems.isEmpty()) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "No images on this board.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(12.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                } else {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        canvasItems.forEachIndexed { index, item ->
+                            val isSelected = viewModel.selectedItemId.value == item.id
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+                                border = BorderStroke(
+                                    1.dp,
+                                    if (isSelected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable {
+                                        viewModel.selectItem(item.id)
+                                        viewModel.centerOnItem(item, viewportWidth, viewportHeight, density)
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Image,
+                                            contentDescription = null,
+                                            tint = if (isSelected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Image #${index + 1} (${(item.scale * 100).roundToInt()}%)",
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                        )
+                                    }
+
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                    ) {
+                                        // Pin state
+                                        IconButton(
+                                            onClick = { viewModel.togglePinItem(item) },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.PushPin,
+                                                contentDescription = "Pin Item",
+                                                tint = if (item.isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                        // Bring to Front
+                                        IconButton(
+                                            onClick = { viewModel.bringToFront(item) },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.FlipToFront,
+                                                contentDescription = "Bring to Front",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                        // Delete Item
+                                        IconButton(
+                                            onClick = { viewModel.deleteItem(item) },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = "Delete Image",
+                                                tint = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Divider
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
+            )
+
+            // Section 4: Drawing Tool Controls
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "DRAWING TOOLS",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp
+                    )
+
+                    Switch(
+                        checked = viewModel.isDrawModeEnabled,
+                        onCheckedChange = { viewModel.isDrawModeEnabled = it },
+                        modifier = Modifier.scale(0.8f)
+                    )
+                }
+
+                if (viewModel.isDrawModeEnabled) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        // Pen vs Eraser Row selection
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = { viewModel.isEraserModeEnabled = false },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (!isEraserModeEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    contentColor = if (!isEraserModeEnabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.Edit, contentDescription = "Brush", modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Pen", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            Button(
+                                onClick = { viewModel.isEraserModeEnabled = true },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isEraserModeEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    contentColor = if (isEraserModeEnabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.Layers, contentDescription = "Eraser", modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Eraser", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        // Colors Palette
+                        if (!isEraserModeEnabled) {
+                            Text(
+                                text = "Colors Preset",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            val colors = listOf(
+                                0xFFF44336.toInt(), // Red
+                                0xFFFFEB3B.toInt(), // Yellow
+                                0xFF2196F3.toInt(), // Blue
+                                0xFF4CAF50.toInt(), // Green
+                                0xFF000000.toInt(), // Black
+                                0xFFFFFFFF.toInt()  // White
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                colors.forEach { colorInt ->
+                                    Box(
+                                        modifier = Modifier
+                                            .size(30.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(colorInt))
+                                            .border(
+                                                width = if (currentColor == colorInt) 3.dp else 1.dp,
+                                                color = if (currentColor == colorInt) {
+                                                    if (colorInt == 0xFFFFFFFF.toInt()) Color.Black else MaterialTheme.colorScheme.primary
+                                                } else {
+                                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                                                },
+                                                shape = CircleShape
+                                            )
+                                            .clickable {
+                                                viewModel.drawingColor = colorInt
+                                                viewModel.isEraserModeEnabled = false
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (currentColor == colorInt) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = "Selected",
+                                                tint = if (colorInt == 0xFFFFEB3B.toInt() || colorInt == 0xFFFFFFFF.toInt()) Color.Black else Color.White,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Brush Width
+                        Text(
+                            text = "Brush Size (${currentWidth.roundToInt()}px)",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Slider(
+                                value = currentWidth,
+                                onValueChange = { viewModel.drawingWidth = it },
+                                valueRange = 2f..40f,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        // Clear Board Drawings
+                        OutlinedButton(
+                            onClick = { viewModel.clearDrawingStrokes() },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = "Clear drawings", modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Clear Board Drawings", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                } else {
+                    Text(
+                        text = "Enable drawing mode to unlock pen options.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                }
+            }
+
+            // Divider
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
+            )
+
+            // Section 5: Board settings & controls
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "BOARD SETTINGS",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Lock Board Button
+                    Button(
+                        onClick = { viewModel.toggleLock() },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (viewModel.isLocked) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+                            contentColor = if (viewModel.isLocked) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                    ) {
+                        Icon(
+                            imageVector = if (viewModel.isLocked) Icons.Default.Lock else Icons.Default.LockOpen,
+                            contentDescription = "Lock",
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(if (viewModel.isLocked) "Locked" else "Lock Board", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    // Auto-Arrange Button
+                    Button(
+                        onClick = { viewModel.autoArrangeGrid("GRID", density) },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                    ) {
+                        Icon(Icons.Default.GridView, contentDescription = "Arrange", modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Grid Arrange", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Theme quick switches
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    val styles = listOf(
+                        "dots" to "Dots",
+                        "lines" to "Lines",
+                        "graph" to "Graph",
+                        "none" to "None"
+                    )
+                    styles.forEach { (styleKey, label) ->
+                        val isSelected = viewModel.gridStyle == styleKey
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    if (isSelected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.surfaceContainerHigh
+                                )
+                                .clickable { viewModel.gridStyle = styleKey }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = label,
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

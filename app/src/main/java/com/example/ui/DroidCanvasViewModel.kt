@@ -6,6 +6,7 @@ import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -29,6 +30,13 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
+
+data class DrawingStroke(
+    val id: String = UUID.randomUUID().toString(),
+    val points: List<Offset>,
+    val color: Int,
+    val strokeWidth: Float
+)
 
 class DroidCanvasViewModel(
     private val repository: DroidCanvasRepository,
@@ -86,6 +94,10 @@ class DroidCanvasViewModel(
     private val undoStack = mutableListOf<List<CanvasItem>>()
     private val redoStack = mutableListOf<List<CanvasItem>>()
 
+    // Drawing Undo/Redo Stacks
+    private val drawingUndoStack = mutableListOf<List<DrawingStroke>>()
+    private val drawingRedoStack = mutableListOf<List<DrawingStroke>>()
+
     // Expose undo/redo availability state to the UI
     private val _canUndo = MutableStateFlow(false)
     val canUndo: StateFlow<Boolean> = _canUndo.asStateFlow()
@@ -94,8 +106,13 @@ class DroidCanvasViewModel(
     val canRedo: StateFlow<Boolean> = _canRedo.asStateFlow()
 
     private fun updateUndoRedoAvailability() {
-        _canUndo.value = undoStack.isNotEmpty()
-        _canRedo.value = redoStack.isNotEmpty()
+        if (_isDrawModeEnabled.value) {
+            _canUndo.value = drawingUndoStack.isNotEmpty()
+            _canRedo.value = drawingRedoStack.isNotEmpty()
+        } else {
+            _canUndo.value = undoStack.isNotEmpty()
+            _canRedo.value = redoStack.isNotEmpty()
+        }
     }
 
     fun saveCurrentStateToUndo() {
@@ -108,7 +125,21 @@ class DroidCanvasViewModel(
         updateUndoRedoAvailability()
     }
 
+    fun saveDrawingStateToUndo() {
+        val currentStrokes = _drawingStrokes.value.map { it.copy() }
+        drawingUndoStack.add(currentStrokes)
+        if (drawingUndoStack.size > 50) {
+            drawingUndoStack.removeAt(0)
+        }
+        drawingRedoStack.clear()
+        updateUndoRedoAvailability()
+    }
+
     fun undo() {
+        if (_isDrawModeEnabled.value) {
+            undoDrawing()
+            return
+        }
         val boardId = _currentBoardId.value ?: return
         if (undoStack.isEmpty()) return
         
@@ -121,6 +152,10 @@ class DroidCanvasViewModel(
     }
 
     fun redo() {
+        if (_isDrawModeEnabled.value) {
+            redoDrawing()
+            return
+        }
         val boardId = _currentBoardId.value ?: return
         if (redoStack.isEmpty()) return
         
@@ -130,6 +165,32 @@ class DroidCanvasViewModel(
         
         updateUndoRedoAvailability()
         restoreSnapshot(nextState)
+    }
+
+    private fun undoDrawing() {
+        val boardId = _currentBoardId.value ?: return
+        if (drawingUndoStack.isEmpty()) return
+        
+        val previousState = drawingUndoStack.removeAt(drawingUndoStack.size - 1)
+        val currentState = _drawingStrokes.value.map { it.copy() }
+        drawingRedoStack.add(currentState)
+        
+        _drawingStrokes.value = previousState
+        saveDrawingStrokes(boardId, previousState)
+        updateUndoRedoAvailability()
+    }
+
+    private fun redoDrawing() {
+        val boardId = _currentBoardId.value ?: return
+        if (drawingRedoStack.isEmpty()) return
+        
+        val nextState = drawingRedoStack.removeAt(drawingRedoStack.size - 1)
+        val currentState = _drawingStrokes.value.map { it.copy() }
+        drawingUndoStack.add(currentState)
+        
+        _drawingStrokes.value = nextState
+        saveDrawingStrokes(boardId, nextState)
+        updateUndoRedoAvailability()
     }
 
     private fun restoreSnapshot(targetState: List<CanvasItem>) {
@@ -214,6 +275,142 @@ class DroidCanvasViewModel(
 
     fun clearSelection() {
         _selectedItemId.value = null
+    }
+
+    // Drawing mode states
+    private var _isDrawModeEnabled = mutableStateOf(false)
+    var isDrawModeEnabled: Boolean
+        get() = _isDrawModeEnabled.value
+        set(value) {
+            _isDrawModeEnabled.value = value
+            if (value) {
+                _selectedItemId.value = null // clear selection when drawing
+            }
+            updateUndoRedoAvailability()
+        }
+
+    private var _isEraserModeEnabled = mutableStateOf(false)
+    var isEraserModeEnabled: Boolean
+        get() = _isEraserModeEnabled.value
+        set(value) {
+            _isEraserModeEnabled.value = value
+        }
+
+    private var _drawingColor = mutableStateOf(0xFFF44336.toInt()) // Red by default
+    var drawingColor: Int
+        get() = _drawingColor.value
+        set(value) {
+            _drawingColor.value = value
+        }
+
+    private var _drawingWidth = mutableStateOf(8f)
+    var drawingWidth: Float
+        get() = _drawingWidth.value
+        set(value) {
+            _drawingWidth.value = value
+        }
+
+    // List of completed strokes
+    private val _drawingStrokes = MutableStateFlow<List<DrawingStroke>>(emptyList())
+    val drawingStrokes: StateFlow<List<DrawingStroke>> = _drawingStrokes.asStateFlow()
+
+    // Currently active stroke being drawn
+    var activeStroke by mutableStateOf<DrawingStroke?>(null)
+
+    fun startNewStroke(startPoint: Offset) {
+        val newStroke = DrawingStroke(
+            points = listOf(startPoint),
+            color = drawingColor,
+            strokeWidth = drawingWidth
+        )
+        activeStroke = newStroke
+    }
+
+    fun appendPointToActiveStroke(point: Offset) {
+        val current = activeStroke ?: return
+        activeStroke = current.copy(points = current.points + point)
+    }
+
+    fun finishActiveStroke() {
+        val stroke = activeStroke ?: return
+        if (stroke.points.isNotEmpty()) {
+            saveDrawingStateToUndo()
+            val updated = _drawingStrokes.value + stroke
+            _drawingStrokes.value = updated
+            val boardId = _currentBoardId.value
+            if (boardId != null) {
+                saveDrawingStrokes(boardId, updated)
+            }
+        }
+        activeStroke = null
+    }
+
+    fun eraseStrokeAt(point: Offset, threshold: Float = 30f) {
+        val updated = _drawingStrokes.value.filter { stroke ->
+            stroke.points.none { pt -> (pt - point).getDistance() < threshold }
+        }
+        if (updated.size != _drawingStrokes.value.size) {
+            saveDrawingStateToUndo()
+            _drawingStrokes.value = updated
+            val boardId = _currentBoardId.value ?: return
+            saveDrawingStrokes(boardId, updated)
+        }
+    }
+
+    fun clearDrawingStrokes() {
+        if (_drawingStrokes.value.isNotEmpty()) {
+            saveDrawingStateToUndo()
+            _drawingStrokes.value = emptyList()
+            val boardId = _currentBoardId.value ?: return
+            saveDrawingStrokes(boardId, emptyList())
+        }
+    }
+
+    fun saveDrawingStrokes(boardId: Int, strokes: List<DrawingStroke>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val file = File(appContext.filesDir, "drawing_strokes_$boardId.txt")
+                val content = strokes.joinToString("\n") { stroke ->
+                    val pointsStr = stroke.points.joinToString(";") { "${it.x},${it.y}" }
+                    "${stroke.id}|${stroke.color}|${stroke.strokeWidth}|$pointsStr"
+                }
+                file.writeText(content)
+            } catch (e: java.lang.Exception) {
+                Log.e(TAG, "Failed to save drawing strokes", e)
+            }
+        }
+    }
+
+    fun loadDrawingStrokes(boardId: Int): List<DrawingStroke> {
+        return try {
+            val file = File(appContext.filesDir, "drawing_strokes_$boardId.txt")
+            if (!file.exists()) return emptyList()
+            val lines = file.readLines()
+            lines.mapNotNull { line ->
+                val parts = line.split("|")
+                if (parts.size < 4) return@mapNotNull null
+                val id = parts[0]
+                val color = parts[1].toIntOrNull() ?: 0xFFF44336.toInt()
+                val strokeWidth = parts[2].toFloatOrNull() ?: 8f
+                val pointsStr = parts[3]
+                val points = if (pointsStr.isEmpty()) {
+                    emptyList()
+                } else {
+                    pointsStr.split(";").mapNotNull { p ->
+                        val coords = p.split(",")
+                        if (coords.size == 2) {
+                            val x = coords[0].toFloatOrNull()
+                            val y = coords[1].toFloatOrNull()
+                            if (x != null && y != null) Offset(x, y) else null
+                        } else null
+                    }
+                }
+                DrawingStroke(id, points, color, strokeWidth)
+            }
+        } catch (e: java.lang.Exception) {
+            Log.e(TAG, "Failed to load drawing strokes", e)
+            emptyList()
+        }
     }
 
     var isLocked by mutableStateOf(false)
@@ -316,13 +513,22 @@ class DroidCanvasViewModel(
             _canvasScale.value = prefs.getFloat("board_scale_$boardId", 1f)
             _canvasTranslateX.value = prefs.getFloat("board_trans_x_$boardId", 0f)
             _canvasTranslateY.value = prefs.getFloat("board_trans_y_$boardId", 0f)
+            viewModelScope.launch(Dispatchers.IO) {
+                val strokes = loadDrawingStrokes(boardId)
+                withContext(Dispatchers.Main) {
+                    _drawingStrokes.value = strokes
+                }
+            }
         } else {
             _canvasScale.value = 1f
             _canvasTranslateX.value = 0f
             _canvasTranslateY.value = 0f
+            _drawingStrokes.value = emptyList()
         }
         undoStack.clear()
         redoStack.clear()
+        drawingUndoStack.clear()
+        drawingRedoStack.clear()
         updateUndoRedoAvailability()
     }
 
