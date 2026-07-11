@@ -910,6 +910,24 @@ class DroidCanvasViewModel(
         }
     }
 
+    fun updateItemAbsoluteScale(item: CanvasItem, targetScale: Float) {
+        if (item.isPinned) return
+        saveCurrentStateToUndo()
+        viewModelScope.launch(Dispatchers.IO) {
+            val updated = item.copy(scale = targetScale.coerceIn(0.05f, 10f))
+            repository.updateCanvasItem(updated)
+        }
+    }
+
+    fun updateItemAbsoluteRotation(item: CanvasItem, targetRotation: Float) {
+        if (item.isPinned) return
+        saveCurrentStateToUndo()
+        viewModelScope.launch(Dispatchers.IO) {
+            val updated = item.copy(rotation = (targetRotation % 360f + 360f) % 360f)
+            repository.updateCanvasItem(updated)
+        }
+    }
+
     fun togglePinItem(item: CanvasItem) {
         saveCurrentStateToUndo()
         viewModelScope.launch(Dispatchers.IO) {
