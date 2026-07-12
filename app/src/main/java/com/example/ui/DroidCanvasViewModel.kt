@@ -27,6 +27,11 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.update
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
@@ -36,6 +41,12 @@ data class DrawingStroke(
     val points: List<Offset>,
     val color: Int,
     val strokeWidth: Float
+)
+
+data class ValuesResult(
+    val processedBitmap: Bitmap,
+    val histogram: IntArray,
+    val distribution: List<Float>
 )
 
 class DroidCanvasViewModel(
@@ -89,6 +100,13 @@ class DroidCanvasViewModel(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+
+    private val _valuesResults = MutableStateFlow<Map<Int, ValuesResult>>(emptyMap())
+    val valuesResults: StateFlow<Map<Int, ValuesResult>> = _valuesResults.asStateFlow()
+
+    private val processingJobs = java.util.concurrent.ConcurrentHashMap<Int, Job>()
+    private val lastProcessedConfigs = java.util.concurrent.ConcurrentHashMap<Int, String>()
+    private val updateJobs = java.util.concurrent.ConcurrentHashMap<Int, Job>()
 
     // Undo/Redo Stacks
     private val undoStack = mutableListOf<List<CanvasItem>>()
@@ -332,7 +350,23 @@ class DroidCanvasViewModel(
     }
 
     fun finishActiveStroke() {
-        val stroke = activeStroke ?: return
+        var stroke = activeStroke ?: return
+        if (stroke.points.size > 2) {
+            val xs = stroke.points.map { it.x }.toFloatArray()
+            val ys = stroke.points.map { it.y }.toFloatArray()
+            
+            // Apply our highly-optimized Java-based stroke simplification & smoothing
+            // Epsilon = 0.8f (simplification threshold), iterations = 2 (smoothing rounds)
+            val optimized = StrokeOptimizer.optimizeStroke(xs, ys, 0.8f, 2)
+            val optimizedXs = optimized[0]
+            val optimizedYs = optimized[1]
+            
+            val optimizedPoints = mutableListOf<Offset>()
+            for (i in optimizedXs.indices) {
+                optimizedPoints.add(Offset(optimizedXs[i], optimizedYs[i]))
+            }
+            stroke = stroke.copy(points = optimizedPoints)
+        }
         if (stroke.points.isNotEmpty()) {
             saveDrawingStateToUndo()
             val updated = _drawingStrokes.value + stroke
@@ -347,7 +381,9 @@ class DroidCanvasViewModel(
 
     fun eraseStrokeAt(point: Offset, threshold: Float = 30f) {
         val updated = _drawingStrokes.value.filter { stroke ->
-            stroke.points.none { pt -> (pt - point).getDistance() < threshold }
+            val xs = stroke.points.map { it.x }.toFloatArray()
+            val ys = stroke.points.map { it.y }.toFloatArray()
+            !StrokeOptimizer.isStrokeIntersectingPoint(xs, ys, point.x, point.y, threshold)
         }
         if (updated.size != _drawingStrokes.value.size) {
             saveDrawingStateToUndo()
@@ -609,6 +645,27 @@ class DroidCanvasViewModel(
                 }
             }
         }
+
+        viewModelScope.launch {
+            canvasItems.collect { items ->
+                val currentIds = items.map { it.id }.toSet()
+                _valuesResults.update { current ->
+                    current.filterKeys { id -> id in currentIds && (items.firstOrNull { it.id == id }?.isValuesEnabled == true) }
+                }
+                
+                processingJobs.keys.retainAll(currentIds)
+                lastProcessedConfigs.keys.retainAll(currentIds)
+                updateJobs.keys.retainAll(currentIds)
+
+                for (item in items) {
+                    if (item.isValuesEnabled) {
+                        scheduleValuesProcessing(item)
+                    } else {
+                        lastProcessedConfigs.remove(item.id)
+                    }
+                }
+            }
+        }
     }
 
     fun selectBoard(boardId: Int) {
@@ -743,7 +800,7 @@ class DroidCanvasViewModel(
                     // Move currentTopY to the next row, since all items in this row have exactly targetDimensionPx height
                     currentTopY += targetDimensionPx + spacing
                 }
-            } else { // "STRIP" (Horizontal film-strip layout)
+            } else if (layoutType == "STRIP") { // "STRIP" (Horizontal film-strip layout)
                 // First pass: scale every item so its visual height is exactly targetDimensionPx
                 // keeping its aspect ratio intact.
                 val processedItems = sortedItems.map { item ->
@@ -774,7 +831,7 @@ class DroidCanvasViewModel(
                 processedItems.forEach { (item, targetScale, visualWidthPx) ->
                     val posX = currentX
                     val posY = 0f // perfect horizontal baseline alignment
-
+ 
                     val updated = item.copy(
                         posX = posX,
                         posY = posY,
@@ -785,6 +842,128 @@ class DroidCanvasViewModel(
                     
                     // Move currentX to the next item, ensuring the horizontal gap is exactly equal to spacing
                     currentX += visualWidthPx + spacing
+                }
+            } else if (layoutType == "COLUMN") { // "COLUMN" (Vertical single-column layout)
+                // Scale every item so its visual width is exactly targetDimensionPx
+                val processedItems = sortedItems.map { item ->
+                    val nativeWidthDp = item.width / density
+                    val nativeHeightDp = item.height / density
+                    
+                    val maxBound = 320f
+                    val maxDimension = maxOf(nativeWidthDp, nativeHeightDp)
+                    val scaleFactor = if (maxDimension > maxBound) {
+                        maxBound / maxDimension
+                    } else {
+                        1f
+                    }
+                    
+                    val displayWidthPx = nativeWidthDp * scaleFactor * density
+                    val displayHeightPx = nativeHeightDp * scaleFactor * density
+                    
+                    // Scale so that visualWidthPx matches targetDimensionPx:
+                    val targetScale = if (displayWidthPx > 0f) targetDimensionPx / displayWidthPx else 1f
+                    val visualHeightPx = displayHeightPx * targetScale
+                    
+                    Triple(item, targetScale, visualHeightPx)
+                }
+                
+                var currentY = 0f
+                processedItems.forEach { (item, targetScale, visualHeightPx) ->
+                    val posX = 0f
+                    val posY = currentY
+                    
+                    val updated = item.copy(
+                        posX = posX,
+                        posY = posY,
+                        scale = targetScale,
+                        rotation = 0f
+                    )
+                    repository.updateCanvasItem(updated)
+                    
+                    currentY += visualHeightPx + spacing
+                }
+            } else if (layoutType == "RADIAL") { // "RADIAL" (Circular distribution)
+                // Scale items uniformly by height
+                val processedItems = sortedItems.map { item ->
+                    val nativeWidthDp = item.width / density
+                    val nativeHeightDp = item.height / density
+                    
+                    val maxBound = 320f
+                    val maxDimension = maxOf(nativeWidthDp, nativeHeightDp)
+                    val scaleFactor = if (maxDimension > maxBound) {
+                        maxBound / maxDimension
+                    } else {
+                        1f
+                    }
+                    
+                    val displayWidthPx = nativeWidthDp * scaleFactor * density
+                    val displayHeightPx = nativeHeightDp * scaleFactor * density
+                    
+                    val targetScale = if (displayHeightPx > 0f) targetDimensionPx / displayHeightPx else 1f
+                    
+                    Pair(item, targetScale)
+                }
+                
+                // Calculate dynamic radius to prevent overlaps with many images
+                val radius = 350f * density + (sortedItems.size * 25f * density)
+                val totalItems = processedItems.size
+                
+                processedItems.forEachIndexed { index, (item, targetScale) ->
+                    val angle = (2 * Math.PI * index) / totalItems
+                    val posX = (radius * Math.cos(angle)).toFloat()
+                    val posY = (radius * Math.sin(angle)).toFloat()
+                    
+                    val updated = item.copy(
+                        posX = posX,
+                        posY = posY,
+                        scale = targetScale,
+                        rotation = 0f
+                    )
+                    repository.updateCanvasItem(updated)
+                }
+            } else if (layoutType == "SPREAD") { // "SPREAD" (Beautiful overlapping Moodboard Spread)
+                // Scale items uniformly by height
+                val processedItems = sortedItems.map { item ->
+                    val nativeWidthDp = item.width / density
+                    val nativeHeightDp = item.height / density
+                    
+                    val maxBound = 320f
+                    val maxDimension = maxOf(nativeWidthDp, nativeHeightDp)
+                    val scaleFactor = if (maxDimension > maxBound) {
+                        maxBound / maxDimension
+                    } else {
+                        1f
+                    }
+                    
+                    val displayWidthPx = nativeWidthDp * scaleFactor * density
+                    val displayHeightPx = nativeHeightDp * scaleFactor * density
+                    
+                    val targetScale = if (displayHeightPx > 0f) targetDimensionPx / displayHeightPx else 1f
+                    val visualWidthPx = displayWidthPx * targetScale
+                    
+                    Triple(item, targetScale, visualWidthPx)
+                }
+                
+                val goldenAngle = 137.5 * Math.PI / 180.0
+                val step = 160f * density // distance between spiral steps
+                
+                processedItems.forEachIndexed { index, (item, targetScale, visualWidthPx) ->
+                    // Beautiful Fermat spiral distribution
+                    val r = step * Math.sqrt((index + 1).toDouble())
+                    val theta = index * goldenAngle
+                    val posX = (r * Math.cos(theta)).toFloat() - (visualWidthPx / 2)
+                    val posY = (r * Math.sin(theta)).toFloat() - (targetDimensionPx / 2)
+                    
+                    // Deterministic pseudo-random rotation to look organic yet consistent
+                    val rotation = ((index * 17) % 31 - 15).toFloat() // range: -15 to +15 degrees
+                    
+                    val updated = item.copy(
+                        posX = posX,
+                        posY = posY,
+                        scale = targetScale,
+                        rotation = rotation
+                    )
+                    repository.updateCanvasItem(updated)
                 }
             }
         }
@@ -954,12 +1133,92 @@ class DroidCanvasViewModel(
         }
     }
 
-    fun toggleGrayscale(item: CanvasItem) {
+    fun toggleValuesEnabled(item: CanvasItem) {
         saveCurrentStateToUndo()
         viewModelScope.launch(Dispatchers.IO) {
-            val updated = item.copy(isGrayscale = !item.isGrayscale)
+            val updated = item.copy(isValuesEnabled = !item.isValuesEnabled)
             repository.updateCanvasItem(updated)
         }
+    }
+
+    fun updateSimplicity(item: CanvasItem, simplicity: Int) {
+        val itemId = item.id
+        updateJobs[itemId]?.cancel()
+        updateJobs[itemId] = viewModelScope.launch(Dispatchers.IO) {
+            delay(50)
+            val updated = item.copy(simplicity = simplicity.coerceIn(0, 100))
+            repository.updateCanvasItem(updated)
+        }
+    }
+
+    fun updateStopsCount(item: CanvasItem, count: Int) {
+        saveCurrentStateToUndo()
+        viewModelScope.launch(Dispatchers.IO) {
+            val newCount = count.coerceIn(2, 8)
+            val defaultStops = ValueProcessor.generateDefaultStops(newCount)
+            val json = ValueProcessor.serializeStops(defaultStops)
+            val updated = item.copy(stopsCount = newCount, stopsJson = json)
+            repository.updateCanvasItem(updated)
+        }
+    }
+
+    fun updateStops(item: CanvasItem, stops: List<ValueStop>) {
+        val itemId = item.id
+        updateJobs[itemId]?.cancel()
+        updateJobs[itemId] = viewModelScope.launch(Dispatchers.IO) {
+            delay(50)
+            val sorted = stops.sortedBy { it.position }
+            val json = ValueProcessor.serializeStops(sorted)
+            val updated = item.copy(stopsJson = json, stopsCount = sorted.size)
+            repository.updateCanvasItem(updated)
+        }
+    }
+
+    fun scheduleValuesProcessing(item: CanvasItem) {
+        val itemId = item.id
+        val path = if (File(item.thumbPath).exists()) item.thumbPath else item.fullPath
+        if (path.isEmpty() || !File(path).exists()) {
+            return
+        }
+
+        val configSignature = "${path}:${item.simplicity}:${item.stopsCount}:${item.stopsJson}"
+        if (lastProcessedConfigs[itemId] == configSignature) {
+            return
+        }
+
+        processingJobs[itemId]?.cancel()
+
+        val job = viewModelScope.launch(Dispatchers.Default) {
+            delay(80)
+
+            try {
+                lastProcessedConfigs[itemId] = configSignature
+                val bitmap = BitmapFactory.decodeFile(path) ?: return@launch
+                
+                val stops = if (item.stopsJson.isEmpty()) {
+                    ValueProcessor.generateDefaultStops(item.stopsCount)
+                } else {
+                    ValueProcessor.parseStops(item.stopsJson)
+                }
+
+                val result = ValueProcessor.processImage(
+                    source = bitmap,
+                    simplicity = item.simplicity,
+                    stops = stops
+                )
+
+                _valuesResults.update { current ->
+                    current + (itemId to ValuesResult(
+                        processedBitmap = result.processedBitmap,
+                        histogram = result.histogram,
+                        distribution = result.distribution
+                    ))
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error processing values for item $itemId", e)
+            }
+        }
+        processingJobs[itemId] = job
     }
 
     fun bringToFront(item: CanvasItem) {
