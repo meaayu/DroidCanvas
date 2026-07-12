@@ -56,7 +56,10 @@ data class CanvasItem(
     val isPinned: Boolean = false,
     val flipHorizontal: Boolean = false,
     val flipVertical: Boolean = false,
-    val isGrayscale: Boolean = false
+    val isValuesEnabled: Boolean = false,
+    val simplicity: Int = 0,
+    val stopsCount: Int = 3,
+    val stopsJson: String = ""
 )
 
 @Dao
@@ -92,7 +95,7 @@ interface DroidCanvasDao {
     suspend fun getMaxZIndex(boardId: Int): Int?
 }
 
-@Database(entities = [Board::class, CanvasItem::class], version = 6, exportSchema = false)
+@Database(entities = [Board::class, CanvasItem::class], version = 8, exportSchema = false)
 abstract class DroidCanvasDatabase : RoomDatabase() {
     abstract fun droidCanvasDao(): DroidCanvasDao
 
@@ -133,6 +136,62 @@ abstract class DroidCanvasDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE canvas_items ADD COLUMN isValuesEnabled INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE canvas_items ADD COLUMN simplicity INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE canvas_items ADD COLUMN stopsCount INTEGER NOT NULL DEFAULT 3")
+                db.execSQL("ALTER TABLE canvas_items ADD COLUMN stopsJson TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Create a temporary table with the exact new schema
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `canvas_items_new` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, 
+                        `boardId` INTEGER NOT NULL, 
+                        `fullPath` TEXT NOT NULL, 
+                        `thumbPath` TEXT NOT NULL, 
+                        `posX` REAL NOT NULL, 
+                        `posY` REAL NOT NULL, 
+                        `width` REAL NOT NULL, 
+                        `height` REAL NOT NULL, 
+                        `scale` REAL NOT NULL, 
+                        `rotation` REAL NOT NULL, 
+                        `zIndex` INTEGER NOT NULL, 
+                        `isPinned` INTEGER NOT NULL, 
+                        `flipHorizontal` INTEGER NOT NULL, 
+                        `flipVertical` INTEGER NOT NULL, 
+                        `isValuesEnabled` INTEGER NOT NULL, 
+                        `simplicity` INTEGER NOT NULL, 
+                        `stopsCount` INTEGER NOT NULL, 
+                        `stopsJson` TEXT NOT NULL, 
+                        FOREIGN KEY(`boardId`) REFERENCES `boards`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                """.trimIndent())
+
+                // Copy the data from the old table
+                db.execSQL("""
+                    INSERT INTO `canvas_items_new` (
+                        id, boardId, fullPath, thumbPath, posX, posY, width, height, scale, rotation, zIndex, isPinned, flipHorizontal, flipVertical, isValuesEnabled, simplicity, stopsCount, stopsJson
+                    ) SELECT 
+                        id, boardId, fullPath, thumbPath, posX, posY, width, height, scale, rotation, zIndex, isPinned, flipHorizontal, flipVertical, isValuesEnabled, simplicity, stopsCount, stopsJson
+                    FROM `canvas_items`
+                """.trimIndent())
+
+                // Drop the old table
+                db.execSQL("DROP TABLE `canvas_items`")
+
+                // Rename the new table
+                db.execSQL("ALTER TABLE `canvas_items_new` RENAME TO `canvas_items`")
+
+                // Recreate the index
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_canvas_items_boardId` ON `canvas_items` (`boardId`)")
+            }
+        }
+
         fun getDatabase(context: Context): DroidCanvasDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -140,7 +199,7 @@ abstract class DroidCanvasDatabase : RoomDatabase() {
                     DroidCanvasDatabase::class.java,
                     "droid_canvas_database"
                 )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                 .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance
