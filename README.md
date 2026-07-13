@@ -61,6 +61,7 @@ cd DroidCanvas
 
 **Incompleted:**
 - [ ] Crop tool
+- [ ] Undo/redo Gesture
 - [ ] Export to image
 
 ---
