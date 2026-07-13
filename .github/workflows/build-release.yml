@@ -2,8 +2,8 @@ name: Android Build Test
 
 on:
   push:
-    branches:
-      - '**'
+    tags: 
+    - 'v*'
   pull_request:
   workflow_dispatch:
 
