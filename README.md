@@ -17,7 +17,7 @@
 
 ## About
 
-DroidCanvas brings a professional reference board experience directly to your Android device. Organize visual references with an infinite canvas, precise controls, and automatic saving — no account [...]
+DroidCanvas brings a professional reference board experience directly to your Android device. Organize visual references with an infinite canvas, precise controls, and automatic saving — no account required.
 
 ---
 
@@ -35,10 +35,13 @@ DroidCanvas brings a professional reference board experience directly to your An
 
 <div align="center">
 
-| <img src="screenshots/Canvas.jpg" width="200" alt="Infinite Canvas" /> | <img src="screenshots/Gallery.jpg" width="200" alt="Gallery View" /> | <img src="screenshots/SidePanel.jpg" width="200" alt="Side Menu" /> |
-|:---:|:---:|:---:|
-| **Infinite Canvas** | **Gallery View** | **Side Menu** |
-| Pan and zoom freely with precise manipulation tools | Browse and organize your reference collection | Quick access to creative tools & settings |
+<table>
+<tr>
+<td><img src="screenshots/Canvas.jpg" width="150" alt="Infinite Canvas" /><br/><b>Infinite Canvas</b><br/>Pan and zoom with precise control</td>
+<td><img src="screenshots/Gallery.jpg" width="150" alt="Gallery View" /><br/><b>Gallery View</b><br/>Organize your references</td>
+<td><img src="screenshots/SidePanel.jpg" width="150" alt="Side Menu" /><br/><b>Side Menu</b><br/>Creative tools & settings</td>
+</tr>
+</table>
 
 </div>
 
