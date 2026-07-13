@@ -501,7 +501,7 @@ class DroidCanvasViewModel(
             prefs.edit().putFloat("arrange_spacing", value).apply()
         }
 
-    private var _gridStyle by mutableStateOf(prefs.getString("grid_style", "dots") ?: "dots")
+    private var _gridStyle by mutableStateOf(prefs.getString("grid_style", "none") ?: "none")
     var gridStyle: String
         get() = _gridStyle
         set(value) {
