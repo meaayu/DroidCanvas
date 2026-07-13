@@ -256,6 +256,17 @@ fun DroidCanvasScreen(
     var renamingBoard by remember { mutableStateOf<Board?>(null) }
     var renamingBoardName by remember { mutableStateOf("") }
 
+    var showEmptyState by remember { mutableStateOf(false) }
+    LaunchedEffect(isLoaded, canvasItems, boards) {
+        if (isLoaded && (canvasItems.isEmpty() || boards.isEmpty())) {
+            // Delay showing the empty state by 150ms to prevent split-second flickering during load transitions
+            kotlinx.coroutines.delay(150)
+            showEmptyState = true
+        } else {
+            showEmptyState = false
+        }
+    }
+
 
 
     // Dynamic viewport measurement for centering imports
@@ -700,7 +711,7 @@ fun DroidCanvasScreen(
             }
 
             // 3. EMPTY STATE ILLUSTRATION
-            if ((isLoaded && canvasItems.isEmpty()) || boards.isEmpty()) {
+            if (showEmptyState) {
                 Card(
                     modifier = Modifier
                         .align(Alignment.Center)
