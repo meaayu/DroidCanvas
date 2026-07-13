@@ -289,10 +289,30 @@ class DroidCanvasViewModel(
     private val _selectedItemId = MutableStateFlow<Int?>(null)
     val selectedItemId: StateFlow<Int?> = _selectedItemId.asStateFlow()
 
+    // Multi-Select Mode states
+    private val _isMultiSelectMode = MutableStateFlow(false)
+    val isMultiSelectMode: StateFlow<Boolean> = _isMultiSelectMode.asStateFlow()
+
+    private val _selectedItemIds = MutableStateFlow<Set<Int>>(emptySet())
+    val selectedItemIds: StateFlow<Set<Int>> = _selectedItemIds.asStateFlow()
+
+    fun toggleMultiSelectMode() {
+        val newMode = !_isMultiSelectMode.value
+        _isMultiSelectMode.value = newMode
+        if (newMode) {
+            // Migrate single selected item if it exists
+            _selectedItemIds.value = _selectedItemId.value?.let { setOf(it) } ?: emptySet()
+            _selectedItemId.value = null
+        } else {
+            _selectedItemIds.value = emptySet()
+        }
+    }
+
     var lastItemTapTime = 0L
 
     fun clearSelection() {
         _selectedItemId.value = null
+        _selectedItemIds.value = emptySet()
     }
 
     // Drawing mode states
@@ -303,6 +323,7 @@ class DroidCanvasViewModel(
             _isDrawModeEnabled.value = value
             if (value) {
                 _selectedItemId.value = null // clear selection when drawing
+                _selectedItemIds.value = emptySet()
             }
             updateUndoRedoAvailability()
         }
@@ -571,49 +592,13 @@ class DroidCanvasViewModel(
     init {
         // Initialize with default board if none exists
         viewModelScope.launch {
-            // 1. Clean up empty "Main Board"s and duplicate "Main Board"s from previous default board creation
-            val initialBoards = repository.allBoards.first()
-            for (b in initialBoards) {
-                if (b.name == "Main Board") {
-                    try {
-                        val items = repository.getItemsForBoard(b.id).first()
-                        if (items.isEmpty()) {
-                            repository.deleteBoard(b)
-                        }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error checking or deleting empty board: ${b.id}", e)
-                    }
-                }
+            var currentBoards = repository.allBoards.first()
+            if (currentBoards.isEmpty()) {
+                repository.insertBoard(Board(name = "Default Workspace"))
+                currentBoards = repository.allBoards.first()
             }
 
-            val boardsAfterClean = repository.allBoards.first()
-            val mainBoards = boardsAfterClean.filter { it.name == "Main Board" }
-            if (mainBoards.size > 1) {
-                // Keep the first one, delete the rest to fix the database for existing users
-                val keepBoard = mainBoards.first()
-                val toDelete = mainBoards.drop(1)
-                for (b in toDelete) {
-                    try {
-                        repository.deleteBoard(b)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error deleting duplicate board: ${b.id}", e)
-                    }
-                }
-            }
-
-            // 2. Refresh board state after clean up and load initial board
-            val cleanedBoards = repository.allBoards.first()
-            val initialBoardId = if (cleanedBoards.isEmpty()) {
-                null
-            } else {
-                val otherBoardsExist = cleanedBoards.any { it.name.trim().lowercase() != "main board" }
-                if (otherBoardsExist) {
-                    cleanedBoards.firstOrNull { it.name.trim().lowercase() != "main board" }?.id
-                } else {
-                    cleanedBoards.firstOrNull()?.id
-                }
-            }
-
+            val initialBoardId = currentBoards.firstOrNull()?.id
             setCurrentBoardId(initialBoardId)
 
             if (initialBoardId != null) {
@@ -630,15 +615,9 @@ class DroidCanvasViewModel(
             // Keep current board ID valid if boards change or current one is deleted
             boards.collect { boardList ->
                 if (boardList.isNotEmpty()) {
-                    val otherBoardsExist = boardList.any { it.name.trim().lowercase() != "main board" }
-                    val visibleBoards = if (otherBoardsExist) {
-                        boardList.filter { it.name.trim().lowercase() != "main board" }
-                    } else {
-                        boardList
-                    }
                     val currentId = _currentBoardId.value
-                    if (currentId == null || !visibleBoards.any { it.id == currentId }) {
-                        setCurrentBoardId(visibleBoards.first().id)
+                    if (currentId == null || !boardList.any { it.id == currentId }) {
+                        setCurrentBoardId(boardList.first().id)
                     }
                 } else {
                     setCurrentBoardId(null)
@@ -716,8 +695,62 @@ class DroidCanvasViewModel(
     fun selectItem(itemId: Int?) {
         if (isLocked) {
             _selectedItemId.value = null
+            _selectedItemIds.value = emptySet()
         } else {
-            _selectedItemId.value = itemId
+            if (itemId == null) {
+                _selectedItemId.value = null
+                _selectedItemIds.value = emptySet()
+            } else if (_isMultiSelectMode.value) {
+                val current = _selectedItemIds.value
+                if (current.contains(itemId)) {
+                    _selectedItemIds.value = current - itemId
+                } else {
+                    _selectedItemIds.value = current + itemId
+                }
+            } else {
+                _selectedItemId.value = itemId
+            }
+        }
+    }
+
+    fun deleteSelectedItems() {
+        val idsToDelete = _selectedItemIds.value
+        if (idsToDelete.isEmpty()) return
+        saveCurrentStateToUndo()
+        viewModelScope.launch(Dispatchers.IO) {
+            val items = canvasItems.value.filter { it.id in idsToDelete }
+            items.forEach { item ->
+                repository.deleteCanvasItem(item)
+            }
+            _selectedItemIds.value = emptySet()
+        }
+    }
+
+    fun togglePinSelectedItems() {
+        val idsToPin = _selectedItemIds.value
+        if (idsToPin.isEmpty()) return
+        saveCurrentStateToUndo()
+        viewModelScope.launch(Dispatchers.IO) {
+            val items = canvasItems.value.filter { it.id in idsToPin }
+            val anyUnpinned = items.any { !it.isPinned }
+            items.forEach { item ->
+                val updated = item.copy(isPinned = anyUnpinned)
+                repository.updateCanvasItem(updated)
+            }
+        }
+    }
+
+    fun toggleValuesSelectedItems() {
+        val idsToToggle = _selectedItemIds.value
+        if (idsToToggle.isEmpty()) return
+        saveCurrentStateToUndo()
+        viewModelScope.launch(Dispatchers.IO) {
+            val items = canvasItems.value.filter { it.id in idsToToggle }
+            val anyDisabled = items.any { !it.isValuesEnabled }
+            items.forEach { item ->
+                val updated = item.copy(isValuesEnabled = anyDisabled)
+                repository.updateCanvasItem(updated)
+            }
         }
     }
 
@@ -980,7 +1013,7 @@ class DroidCanvasViewModel(
             var boardId = _currentBoardId.value
             if (boardId == null) {
                 // Automatically create a board if none exists
-                val newBoardId = repository.insertBoard(Board(name = "Main Board"))
+                val newBoardId = repository.insertBoard(Board(name = "Default Workspace"))
                 boardId = newBoardId.toInt()
                 withContext(Dispatchers.Main) {
                     setCurrentBoardId(boardId)

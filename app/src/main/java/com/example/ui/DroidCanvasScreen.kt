@@ -63,6 +63,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckBox
@@ -79,6 +82,8 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ZoomIn
+import androidx.compose.material.icons.filled.ZoomOut
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
@@ -101,6 +106,7 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Landscape
 import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material.icons.filled.Redo
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -221,17 +227,15 @@ fun DroidCanvasScreen(
     val context = LocalContext.current
     val density = LocalDensity.current
     val boards by viewModel.boards.collectAsState()
-    val otherBoardsExist = boards.any { it.name.trim().lowercase() != "main board" }
-    val visibleBoards = if (otherBoardsExist) {
-        boards.filter { it.name.trim().lowercase() != "main board" }
-    } else {
-        boards
-    }
+    val visibleBoards = boards
+    val defaultBoardId = remember(boards) { boards.minByOrNull { it.id }?.id }
     val activeBoardId by viewModel.currentBoardId.collectAsState()
     val isInitialLoadComplete by viewModel.isInitialLoadComplete.collectAsState()
     val canvasItems by viewModel.canvasItems.collectAsState()
     val drawingStrokes by viewModel.drawingStrokes.collectAsState()
     val selectedItemId by viewModel.selectedItemId.collectAsState()
+    val isMultiSelectMode by viewModel.isMultiSelectMode.collectAsState()
+    val selectedItemIds by viewModel.selectedItemIds.collectAsState()
     val isLoaded by viewModel.isLoaded.collectAsState()
     val isDrawModeEnabled = viewModel.isDrawModeEnabled
 
@@ -640,7 +644,7 @@ fun DroidCanvasScreen(
                     canvasItems.forEach { item ->
                         CanvasItemView(
                             item = item,
-                            isSelected = selectedItemId == item.id,
+                            isSelected = if (isMultiSelectMode) selectedItemIds.contains(item.id) else selectedItemId == item.id,
                             viewModel = viewModel,
                             globalIsMultiTouch = globalIsMultiTouch,
                             viewportWidth = viewportWidth,
@@ -883,17 +887,109 @@ fun DroidCanvasScreen(
                 )
             }
 
-            // 3.5. DRAWING TOOLBAR (Floating at bottom center when draw mode is active)
+            // 3.7. MULTI-SELECT CONTEXTUAL ACTIONS PANEL (Floating above bottom bar when items are selected in multi-select mode)
             androidx.compose.animation.AnimatedVisibility(
-                visible = isDrawModeEnabled,
+                visible = isMultiSelectMode && selectedItemIds.isNotEmpty(),
                 enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
                 exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(bottom = 96.dp) // Offset above the new consolidated bottom bar so they don't overlap!
+                    .padding(bottom = 88.dp) // Float elegantly above the bottom dock
             ) {
-                DrawingToolbar(viewModel = viewModel)
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = if (darkTheme) Color(0xFF1E2127) else Color(0xFFEFF1F6),
+                    border = BorderStroke(
+                        1.dp,
+                        if (darkTheme) Color(0xFF32363F) else Color(0xFFDCDFE7)
+                    ),
+                    tonalElevation = 8.dp,
+                    shadowElevation = 12.dp,
+                    modifier = Modifier.testTag("multi_select_actions_panel")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Selection Count Text
+                        Text(
+                            text = "${selectedItemIds.size} Selected",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (darkTheme) Color.White else Color.Black
+                        )
+
+                        // Vertical Divider
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .height(20.dp)
+                                .background(if (darkTheme) Color(0xFF32363F) else Color(0xFFDCDFE7))
+                        )
+
+                        // Pin/Unpin Button
+                        IconButton(
+                            onClick = { viewModel.togglePinSelectedItems() },
+                            modifier = Modifier.size(36.dp).testTag("multi_select_pin")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PushPin,
+                                contentDescription = "Pin/Unpin Selected",
+                                tint = if (darkTheme) Color.White else Color(0xFF2E4E80),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        // Values Study Mode Button
+                        IconButton(
+                            onClick = { viewModel.toggleValuesSelectedItems() },
+                            modifier = Modifier.size(36.dp).testTag("multi_select_values")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Contrast,
+                                contentDescription = "Toggle Values Study",
+                                tint = if (darkTheme) Color.White else Color(0xFF2E4E80),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        // Delete Selected Button
+                        IconButton(
+                            onClick = { viewModel.deleteSelectedItems() },
+                            modifier = Modifier.size(36.dp).testTag("multi_select_delete")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete Selected",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        // Divider
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .height(20.dp)
+                                .background(if (darkTheme) Color(0xFF32363F) else Color(0xFFDCDFE7))
+                        )
+
+                        // Clear Selection Button
+                        IconButton(
+                            onClick = { viewModel.selectItem(null) },
+                            modifier = Modifier.size(36.dp).testTag("multi_select_clear")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Clear Selection",
+                                tint = if (darkTheme) Color(0xFF707684) else Color(0xFF8E95A5),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
             }
 
             // 3.6. FLOATING CONSOLIDATED BOTTOM BAR (Bottom Center)
@@ -926,33 +1022,6 @@ fun DroidCanvasScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // 1. Brush / Drawing Toggle Button
-                        IconButton(
-                            onClick = { viewModel.isDrawModeEnabled = !viewModel.isDrawModeEnabled },
-                            modifier = Modifier
-                                .size(40.dp)
-                                .testTag("bottom_bar_draw_toggle")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Brush,
-                                contentDescription = "Drawing Mode",
-                                tint = if (isDrawModeEnabled) {
-                                    if (darkTheme) MaterialTheme.colorScheme.primary else Color(0xFF2E4E80)
-                                } else {
-                                    if (darkTheme) Color(0xFF707684) else Color(0xFF8E95A5)
-                                },
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        // Divider 1
-                        Box(
-                            modifier = Modifier
-                                .width(1.dp)
-                                .height(24.dp)
-                                .background(if (darkTheme) Color(0xFF32363F) else Color(0xFFDCDFE7))
-                        )
-
                         // 2. Undo Button
                         IconButton(
                             onClick = { viewModel.undo() },
@@ -994,6 +1063,33 @@ fun DroidCanvasScreen(
                         }
 
                         // Divider 2
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .height(24.dp)
+                                .background(if (darkTheme) Color(0xFF32363F) else Color(0xFFDCDFE7))
+                        )
+
+                        // Multi-Select Toggle Button
+                        IconButton(
+                            onClick = { viewModel.toggleMultiSelectMode() },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .testTag("bottom_bar_multiselect_toggle")
+                        ) {
+                            Icon(
+                                imageVector = if (isMultiSelectMode) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
+                                contentDescription = "Multi-Select Mode",
+                                tint = if (isMultiSelectMode) {
+                                    if (darkTheme) MaterialTheme.colorScheme.primary else Color(0xFF2E4E80)
+                                } else {
+                                    if (darkTheme) Color(0xFF707684) else Color(0xFF8E95A5)
+                                },
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        // Divider 2.5
                         Box(
                             modifier = Modifier
                                 .width(1.dp)
@@ -1860,7 +1956,7 @@ fun DroidCanvasScreen(
                                                 modifier = Modifier.size(18.dp)
                                             )
                                         }
-                                        if (visibleBoards.size > 1) {
+                                        if (visibleBoards.size > 1 && b.id != defaultBoardId) {
                                             IconButton(
                                                 onClick = {
                                                     viewModel.deleteBoard(b)
@@ -3083,7 +3179,7 @@ fun CanvasItemView(
         }
 
         // Selected handles and gestures on all four corners
-        if (isSelected && !latestItem.isPinned) {
+        if (isSelected && !latestItem.isPinned && !viewModel.isMultiSelectMode.value) {
             val handleSize = ((28 / canvasScale).dp).coerceIn(20.dp, 36.dp)
             val touchSize = ((56 / canvasScale).dp).coerceIn(44.dp, 64.dp)
             val halfTouchOffset = touchSize / 2
@@ -3670,14 +3766,11 @@ fun SidebarContent(
     modifier: Modifier = Modifier
 ) {
     val boards by viewModel.boards.collectAsState()
-    val otherBoardsExist = boards.any { it.name.trim().lowercase() != "main board" }
-    val visibleBoards = if (otherBoardsExist) {
-        boards.filter { it.name.trim().lowercase() != "main board" }
-    } else {
-        boards
-    }
+    val visibleBoards = boards
+    val defaultBoardId = remember(boards) { boards.minByOrNull { it.id }?.id }
     val activeBoardId by viewModel.currentBoardId.collectAsState()
     val canvasItems by viewModel.canvasItems.collectAsState()
+    val drawingStrokes by viewModel.drawingStrokes.collectAsState()
     val isDrawModeEnabled = viewModel.isDrawModeEnabled
     val currentWidth = viewModel.drawingWidth
     val currentColor = viewModel.drawingColor
@@ -3849,74 +3942,108 @@ fun SidebarContent(
                                 verticalArrangement = Arrangement.spacedBy(6.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                visibleBoards.forEach { board ->
-                                    val isActive = board.id == activeBoardId
-                                    Surface(
-                                        shape = RoundedCornerShape(12.dp),
-                                        color = if (isActive) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
-                                        border = BorderStroke(
-                                            1.dp,
-                                            if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-                                        ),
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .clickable { viewModel.selectBoard(board.id) }
-                                    ) {
-                                        Row(
+                                if (visibleBoards.isEmpty()) {
+                                    Text(
+                                        text = "No workspaces found",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                        modifier = Modifier.padding(vertical = 8.dp)
+                                    )
+                                } else {
+                                    visibleBoards.forEach { board ->
+                                        val isActive = board.id == activeBoardId
+                                        val dateString = remember(board.createdAt) {
+                                            val date = java.util.Date(board.createdAt)
+                                            java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.getDefault()).format(date)
+                                        }
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = if (isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f) else Color.Transparent,
+                                            border = if (isActive) BorderStroke(
+                                                1.dp,
+                                                MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                            ) else null,
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .clickable { viewModel.selectBoard(board.id) }
                                         ) {
                                             Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 8.dp, vertical = 6.dp),
                                                 verticalAlignment = Alignment.CenterVertically,
-                                                modifier = Modifier.weight(1f)
+                                                horizontalArrangement = Arrangement.SpaceBetween
                                             ) {
-                                                Icon(
-                                                    imageVector = if (isActive) Icons.Default.Check else Icons.Default.Folder,
-                                                    contentDescription = null,
-                                                    tint = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.size(16.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Text(
-                                                    text = board.name,
-                                                    color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
-                                                    maxLines = 1,
-                                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                                )
-                                            }
-
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                            ) {
-                                                IconButton(
-                                                    onClick = { onRenameBoardClick(board) },
-                                                    modifier = Modifier.size(28.dp)
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier.weight(1f)
                                                 ) {
+                                                    // Solid colored bar indicator on active item
+                                                    if (isActive) {
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .width(4.dp)
+                                                                .height(28.dp)
+                                                                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp))
+                                                        )
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                    } else {
+                                                        Spacer(modifier = Modifier.width(12.dp))
+                                                    }
+
                                                     Icon(
-                                                        imageVector = Icons.Default.Edit,
-                                                        contentDescription = "Rename Board",
-                                                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                                                        modifier = Modifier.size(14.dp)
+                                                        imageVector = if (isActive) Icons.Default.CheckCircle else Icons.Default.Folder,
+                                                        contentDescription = null,
+                                                        tint = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                                                        modifier = Modifier.size(18.dp)
                                                     )
+                                                    Spacer(modifier = Modifier.width(10.dp))
+                                                    
+                                                    Column {
+                                                        Text(
+                                                            text = board.name,
+                                                            color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                                            style = MaterialTheme.typography.bodyMedium,
+                                                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+                                                            maxLines = 1,
+                                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                        )
+                                                        Text(
+                                                            text = "Created $dateString",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = if (isActive) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                                        )
+                                                    }
                                                 }
-                                                if (visibleBoards.size > 1) {
+
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                                ) {
                                                     IconButton(
-                                                        onClick = { viewModel.deleteBoard(board) },
+                                                        onClick = { onRenameBoardClick(board) },
                                                         modifier = Modifier.size(28.dp)
                                                     ) {
                                                         Icon(
-                                                            imageVector = Icons.Default.Delete,
-                                                            contentDescription = "Delete Board",
-                                                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                                                            imageVector = Icons.Default.Edit,
+                                                            contentDescription = "Rename Board",
+                                                            tint = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                                             modifier = Modifier.size(14.dp)
                                                         )
+                                                    }
+                                                    if (visibleBoards.size > 1 && board.id != defaultBoardId) {
+                                                        IconButton(
+                                                            onClick = { viewModel.deleteBoard(board) },
+                                                            modifier = Modifier.size(28.dp)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Delete,
+                                                                contentDescription = "Delete Board",
+                                                                tint = if (isActive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                                                                modifier = Modifier.size(14.dp)
+                                                            )
+                                                        }
                                                     }
                                                 }
                                             }
@@ -3960,72 +4087,13 @@ fun SidebarContent(
                                 ) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = "Scale / Zoom",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Text(
-                                            text = "${(viewModel.canvasScale * 100).roundToInt()}%",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        IconButton(
-                                            onClick = {
-                                                viewModel.canvasScale = (viewModel.canvasScale - 0.25f).coerceIn(0.1f, 4f)
-                                            },
-                                            modifier = Modifier.size(24.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Close, // Minus representation
-                                                contentDescription = "Zoom Out",
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                        }
-
-                                        Slider(
-                                            value = viewModel.canvasScale,
-                                            onValueChange = { viewModel.canvasScale = it },
-                                            valueRange = 0.1f..4.0f,
-                                            modifier = Modifier.weight(1f)
-                                        )
-
-                                        IconButton(
-                                            onClick = {
-                                                viewModel.canvasScale = (viewModel.canvasScale + 0.25f).coerceIn(0.1f, 4f)
-                                            },
-                                            modifier = Modifier.size(24.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Add, // Plus representation
-                                                contentDescription = "Zoom In",
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                        }
-                                    }
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
                                         Button(
                                             onClick = { viewModel.resetZoom() },
                                             colors = ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                                contentColor = MaterialTheme.colorScheme.onSurface
+                                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                                             ),
                                             shape = RoundedCornerShape(8.dp),
                                             modifier = Modifier.weight(1f),
@@ -4045,8 +4113,8 @@ fun SidebarContent(
                                                 viewModel.fitToContent(viewportWidth, viewportHeight, density)
                                             },
                                             colors = ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                                contentColor = MaterialTheme.colorScheme.onSurface
+                                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                                             ),
                                             shape = RoundedCornerShape(8.dp),
                                             modifier = Modifier.weight(1f),
@@ -4059,6 +4127,51 @@ fun SidebarContent(
                                             )
                                             Spacer(modifier = Modifier.width(4.dp))
                                             Text("Fit All", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp))
+                                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Info,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                            Text(
+                                                text = "Zoom: ${(viewModel.canvasScale * 100).roundToInt()}%",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.CenterFocusStrong,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                            Text(
+                                                text = "Pan: [${viewModel.canvasTranslateX.roundToInt()}, ${viewModel.canvasTranslateY.roundToInt()}]",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                fontWeight = FontWeight.Medium
+                                            )
                                         }
                                     }
                                 }
@@ -4077,7 +4190,7 @@ fun SidebarContent(
                     // Section 7: Board settings & controls
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         SidebarSectionHeader(
-                            title = "BOARD SETTINGS",
+                            title = "CANVAS GRID",
                             isExpanded = isSettingsExpanded,
                             onToggle = { isSettingsExpanded = !isSettingsExpanded }
                         )
@@ -4091,180 +4204,67 @@ fun SidebarContent(
                                 verticalArrangement = Arrangement.spacedBy(10.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    // Lock Board Button
-                                    Button(
-                                        onClick = { viewModel.toggleLock() },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (viewModel.isLocked) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer,
-                                            contentColor = if (viewModel.isLocked) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
-                                        ),
-                                        shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.weight(1f),
-                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-                                        contentPadding = PaddingValues(0.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = if (viewModel.isLocked) Icons.Default.Lock else Icons.Default.LockOpen,
-                                            contentDescription = "Lock",
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(if (viewModel.isLocked) "Locked" else "Lock Board", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    }
 
-                                    // Auto-Arrange Grid Button
-                                    Button(
-                                        onClick = { viewModel.autoArrangeGrid("GRID", density) },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                            contentColor = MaterialTheme.colorScheme.onSurface
-                                        ),
-                                        shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.weight(1f),
-                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-                                        contentPadding = PaddingValues(0.dp)
-                                    ) {
-                                        Icon(Icons.Default.GridView, contentDescription = "Arrange Grid", modifier = Modifier.size(14.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Grid Layout", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
+                                val styles = listOf(
+                                    Triple("dots", "Dotted", "Subtle dot matrix grid"),
+                                    Triple("lines", "Lines", "Horizontal & vertical lines"),
+                                    Triple("graph", "Graph", "Major & minor graph lines"),
+                                    Triple("none", "None", "Solid blank canvas")
+                                )
 
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    // Auto-Arrange Strip Button
-                                    Button(
-                                        onClick = { viewModel.autoArrangeGrid("STRIP", density) },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                            contentColor = MaterialTheme.colorScheme.onSurface
-                                        ),
-                                        shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.weight(1f),
-                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-                                        contentPadding = PaddingValues(0.dp)
+                                // Display in a beautiful 2x2 grid
+                                styles.chunked(2).forEach { rowItems ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-                                        Icon(Icons.Default.ViewStream, contentDescription = "Arrange Strip", modifier = Modifier.size(14.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Strip Layout", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    }
-
-                                    // Settings Button
-                                    Button(
-                                        onClick = onSettingsClick,
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                            contentColor = MaterialTheme.colorScheme.onSurface
-                                        ),
-                                        shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.weight(1f),
-                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-                                        contentPadding = PaddingValues(0.dp)
-                                    ) {
-                                        Icon(Icons.Default.Settings, contentDescription = "Open Settings", modifier = Modifier.size(14.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Settings", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-
-                                // Undo and Redo row
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    // Undo Button
-                                    Button(
-                                        onClick = { viewModel.undo() },
-                                        enabled = canUndo,
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                            contentColor = MaterialTheme.colorScheme.onSurface,
-                                            disabledContainerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.5f),
-                                            disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                                        ),
-                                        shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.weight(1f),
-                                        border = BorderStroke(
-                                            1.dp,
-                                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (canUndo) 0.6f else 0.3f)
-                                        ),
-                                        contentPadding = PaddingValues(0.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Undo,
-                                            contentDescription = "Undo",
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Undo", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    }
-
-                                    // Redo Button
-                                    Button(
-                                        onClick = { viewModel.redo() },
-                                        enabled = canRedo,
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                            contentColor = MaterialTheme.colorScheme.onSurface,
-                                            disabledContainerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.5f),
-                                            disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                                        ),
-                                        shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.weight(1f),
-                                        border = BorderStroke(
-                                            1.dp,
-                                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (canRedo) 0.6f else 0.3f)
-                                        ),
-                                        contentPadding = PaddingValues(0.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Redo,
-                                            contentDescription = "Redo",
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Redo", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-
-                                // Theme/Grid quick switches
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    val styles = listOf(
-                                        "dots" to "Dots",
-                                        "lines" to "Lines",
-                                        "graph" to "Graph",
-                                        "none" to "None"
-                                    )
-                                    styles.forEach { (styleKey, label) ->
-                                        val isSelected = viewModel.gridStyle == styleKey
-                                        Box(
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .clip(RoundedCornerShape(8.dp))
-                                                .background(
-                                                    if (isSelected) MaterialTheme.colorScheme.primary
-                                                    else MaterialTheme.colorScheme.surfaceContainerHigh
-                                                )
-                                                .clickable { viewModel.gridStyle = styleKey }
-                                                .padding(vertical = 8.dp),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                text = label,
-                                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                                maxLines = 1
-                                            )
+                                        rowItems.forEach { (styleKey, title, description) ->
+                                            val isSelected = viewModel.gridStyle == styleKey
+                                            Surface(
+                                                shape = RoundedCornerShape(12.dp),
+                                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+                                                border = BorderStroke(
+                                                    width = if (isSelected) 1.5.dp else 1.dp,
+                                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                                ),
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .clip(RoundedCornerShape(12.dp))
+                                                    .clickable { viewModel.gridStyle = styleKey }
+                                            ) {
+                                                Column(
+                                                    modifier = Modifier.padding(12.dp),
+                                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Text(
+                                                            text = title,
+                                                            style = MaterialTheme.typography.bodyMedium,
+                                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                                        )
+                                                        if (isSelected) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Check,
+                                                                contentDescription = "Selected",
+                                                                tint = MaterialTheme.colorScheme.primary,
+                                                                modifier = Modifier.size(16.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                    Text(
+                                                        text = description,
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        fontSize = 10.sp,
+                                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        lineHeight = 12.sp
+                                                    )
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -4295,182 +4295,266 @@ fun SidebarContent(
                             exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
                         ) {
                             if (viewModel.isDrawModeEnabled) {
-                                Column(
-                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                                    ),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    // Pen vs Eraser Row selection
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    Column(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(12.dp)
                                     ) {
-                                        Button(
-                                            onClick = { viewModel.isEraserModeEnabled = false },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = if (!isEraserModeEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
-                                                contentColor = if (!isEraserModeEnabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                        // Live Brush Size & Color Preview
+                                        Card(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(64.dp),
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
                                             ),
-                                            shape = RoundedCornerShape(8.dp),
-                                            modifier = Modifier.weight(1f)
+                                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                         ) {
-                                            Icon(Icons.Default.Edit, contentDescription = "Brush", modifier = Modifier.size(16.dp))
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text("Pen", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                        }
-
-                                        Button(
-                                            onClick = { viewModel.isEraserModeEnabled = true },
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = if (isEraserModeEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
-                                                contentColor = if (isEraserModeEnabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                                            ),
-                                            shape = RoundedCornerShape(8.dp),
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            Icon(Icons.Default.Layers, contentDescription = "Eraser", modifier = Modifier.size(16.dp))
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text("Eraser", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                        }
-                                    }
-
-                                    // Colors Palette
-                                    if (!isEraserModeEnabled) {
-                                        Text(
-                                            text = "Colors Preset",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        val colors = listOf(
-                                            0xFFF44336.toInt(), // Red
-                                            0xFFFFEB3B.toInt(), // Yellow
-                                            0xFF2196F3.toInt(), // Blue
-                                            0xFF4CAF50.toInt(), // Green
-                                            0xFF000000.toInt(), // Black
-                                            0xFFFFFFFF.toInt()  // White
-                                        )
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween
-                                        ) {
-                                            colors.forEach { colorInt ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .padding(horizontal = 16.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Text(
+                                                    text = "Live Brush Tip",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                                
                                                 Box(
                                                     modifier = Modifier
-                                                        .size(30.dp)
-                                                        .clip(CircleShape)
-                                                        .background(Color(colorInt))
-                                                        .border(
-                                                            width = if (currentColor == colorInt) 3.dp else 1.dp,
-                                                            color = if (currentColor == colorInt) {
-                                                                if (colorInt == 0xFFFFFFFF.toInt()) Color.Black else MaterialTheme.colorScheme.primary
-                                                            } else {
-                                                                MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                                                            },
-                                                            shape = CircleShape
-                                                        )
-                                                        .clickable {
-                                                            viewModel.drawingColor = colorInt
-                                                            viewModel.isEraserModeEnabled = false
-                                                        },
+                                                        .size(48.dp)
+                                                        .background(
+                                                            MaterialTheme.colorScheme.surfaceContainerHigh,
+                                                            RoundedCornerShape(8.dp)
+                                                        ),
                                                     contentAlignment = Alignment.Center
                                                 ) {
-                                                    if (currentColor == colorInt) {
+                                                    if (!isEraserModeEnabled) {
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .size(currentWidth.coerceIn(2f, 40f).dp)
+                                                                .clip(CircleShape)
+                                                                .background(Color(currentColor))
+                                                        )
+                                                    } else {
                                                         Icon(
-                                                            imageVector = Icons.Default.Check,
-                                                            contentDescription = "Selected",
-                                                            tint = if (colorInt == 0xFFFFEB3B.toInt() || colorInt == 0xFFFFFFFF.toInt()) Color.Black else Color.White,
-                                                            modifier = Modifier.size(14.dp)
+                                                            imageVector = Icons.Default.Layers,
+                                                            contentDescription = "Eraser Tip",
+                                                            tint = MaterialTheme.colorScheme.primary,
+                                                            modifier = Modifier.size(20.dp)
                                                         )
                                                     }
                                                 }
                                             }
                                         }
-                                    }
 
-                                    // Brush Width
-                                    Text(
-                                        text = "Brush Size (${currentWidth.roundToInt()}px)",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Slider(
-                                            value = currentWidth,
-                                            onValueChange = { viewModel.drawingWidth = it },
-                                            valueRange = 2f..40f,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                    }
-
-                                    // Undo and Redo row
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        // Undo Button
-                                        Button(
-                                            onClick = { viewModel.undo() },
-                                            enabled = canUndo,
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                                contentColor = MaterialTheme.colorScheme.onSurface,
-                                                disabledContainerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.5f),
-                                                disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                                            ),
-                                            shape = RoundedCornerShape(8.dp),
-                                            modifier = Modifier.weight(1f),
-                                            border = BorderStroke(
-                                                1.dp,
-                                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (canUndo) 0.6f else 0.3f)
-                                            ),
-                                            contentPadding = PaddingValues(0.dp)
+                                        // Pen vs Eraser Row selection
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Undo,
-                                                contentDescription = "Undo",
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text("Undo", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            Button(
+                                                onClick = { viewModel.isEraserModeEnabled = false },
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = if (!isEraserModeEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
+                                                    contentColor = if (!isEraserModeEnabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                                ),
+                                                shape = RoundedCornerShape(8.dp),
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Icon(Icons.Default.Edit, contentDescription = "Brush", modifier = Modifier.size(16.dp))
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("Pen", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                            }
+
+                                            Button(
+                                                onClick = { viewModel.isEraserModeEnabled = true },
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = if (isEraserModeEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh,
+                                                    contentColor = if (isEraserModeEnabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                                ),
+                                                shape = RoundedCornerShape(8.dp),
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Icon(Icons.Default.Layers, contentDescription = "Eraser", modifier = Modifier.size(16.dp))
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("Eraser", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                            }
                                         }
 
-                                        // Redo Button
-                                        Button(
-                                            onClick = { viewModel.redo() },
-                                            enabled = canRedo,
-                                            colors = ButtonDefaults.buttonColors(
-                                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                                contentColor = MaterialTheme.colorScheme.onSurface,
-                                                disabledContainerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.5f),
-                                                disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                                            ),
-                                            shape = RoundedCornerShape(8.dp),
-                                            modifier = Modifier.weight(1f),
-                                            border = BorderStroke(
-                                                1.dp,
-                                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (canRedo) 0.6f else 0.3f)
-                                            ),
-                                            contentPadding = PaddingValues(0.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Redo,
-                                                contentDescription = "Redo",
-                                                modifier = Modifier.size(14.dp)
+                                        // Colors Palette
+                                        if (!isEraserModeEnabled) {
+                                            Text(
+                                                text = "Colors Preset",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text("Redo", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            val colors = listOf(
+                                                0xFFF44336.toInt(), // Red
+                                                0xFFFFEB3B.toInt(), // Yellow
+                                                0xFF2196F3.toInt(), // Blue
+                                                0xFF4CAF50.toInt(), // Green
+                                                0xFF000000.toInt(), // Black
+                                                0xFFFFFFFF.toInt()  // White
+                                            )
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                colors.forEach { colorInt ->
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(30.dp)
+                                                            .clip(CircleShape)
+                                                            .background(Color(colorInt))
+                                                            .border(
+                                                                width = if (currentColor == colorInt) 3.dp else 1.dp,
+                                                                color = if (currentColor == colorInt) {
+                                                                    if (colorInt == 0xFFFFFFFF.toInt()) Color.Black else MaterialTheme.colorScheme.primary
+                                                                } else {
+                                                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                                                                },
+                                                                shape = CircleShape
+                                                            )
+                                                            .clickable {
+                                                                viewModel.drawingColor = colorInt
+                                                                viewModel.isEraserModeEnabled = false
+                                                            },
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        if (currentColor == colorInt) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Check,
+                                                                contentDescription = "Selected",
+                                                                tint = if (colorInt == 0xFFFFEB3B.toInt() || colorInt == 0xFFFFFFFF.toInt()) Color.Black else Color.White,
+                                                                modifier = Modifier.size(14.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
-                                    }
 
-                                    // Clear Board Drawings
-                                    OutlinedButton(
-                                        onClick = { viewModel.clearDrawingStrokes() },
-                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Icon(Icons.Default.Delete, contentDescription = "Clear drawings", modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Clear Board Drawings", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        // Brush Width
+                                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            Text(
+                                                text = "Brush Size (${currentWidth.roundToInt()}px)",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Slider(
+                                                    value = currentWidth,
+                                                    onValueChange = { viewModel.drawingWidth = it },
+                                                    valueRange = 2f..40f,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                            }
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                val quickSizes = listOf(
+                                                    "XS" to 4f,
+                                                    "S" to 10f,
+                                                    "M" to 16f,
+                                                    "L" to 24f,
+                                                    "XL" to 36f
+                                                )
+                                                quickSizes.forEach { (label, sizeVal) ->
+                                                    val isSelected = currentWidth.roundToInt() == sizeVal.roundToInt()
+                                                    AssistChip(
+                                                        onClick = { viewModel.drawingWidth = sizeVal },
+                                                        label = { Text(label, fontSize = 10.sp, fontWeight = FontWeight.Bold) },
+                                                        colors = AssistChipDefaults.assistChipColors(
+                                                            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                                            labelColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    )
+                                                }
+                                            }
+                                        }
+
+                                        // Undo and Redo row
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            // Undo Button
+                                            Button(
+                                                onClick = { viewModel.undo() },
+                                                enabled = canUndo,
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                                    contentColor = MaterialTheme.colorScheme.onSurface,
+                                                    disabledContainerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.5f),
+                                                    disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                                ),
+                                                shape = RoundedCornerShape(8.dp),
+                                                modifier = Modifier.weight(1f),
+                                                border = BorderStroke(
+                                                    1.dp,
+                                                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (canUndo) 0.6f else 0.3f)
+                                                ),
+                                                contentPadding = PaddingValues(0.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Undo,
+                                                    contentDescription = "Undo",
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text("Undo", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            }
+
+                                            // Redo Button
+                                            Button(
+                                                onClick = { viewModel.redo() },
+                                                enabled = canRedo,
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                                    contentColor = MaterialTheme.colorScheme.onSurface,
+                                                    disabledContainerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.5f),
+                                                    disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                                ),
+                                                shape = RoundedCornerShape(8.dp),
+                                                modifier = Modifier.weight(1f),
+                                                border = BorderStroke(
+                                                    1.dp,
+                                                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (canRedo) 0.6f else 0.3f)
+                                                ),
+                                                contentPadding = PaddingValues(0.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Redo,
+                                                    contentDescription = "Redo",
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text("Redo", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+
+                                        // Clear Board Drawings
+                                        OutlinedButton(
+                                            onClick = { viewModel.clearDrawingStrokes() },
+                                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Icon(Icons.Default.Delete, contentDescription = "Clear drawings", modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Clear Board Drawings", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        }
                                     }
                                 }
                             } else {
@@ -4524,12 +4608,24 @@ fun SidebarContent(
                                                 verticalAlignment = Alignment.CenterVertically,
                                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                                             ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Image,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.size(16.dp)
-                                                )
+                                                // Element thumbnail inside inspector header
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(24.dp)
+                                                        .clip(RoundedCornerShape(4.dp))
+                                                        .background(MaterialTheme.colorScheme.surfaceContainer),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    AsyncImage(
+                                                        model = ImageRequest.Builder(LocalContext.current)
+                                                            .data(selectedItem.thumbPath)
+                                                            .crossfade(true)
+                                                            .build(),
+                                                        contentDescription = "Selected layer thumbnail",
+                                                        contentScale = ContentScale.Crop,
+                                                        modifier = Modifier.fillMaxSize()
+                                                    )
+                                                }
                                                 Text(
                                                     text = "Image #${itemIndex + 1}",
                                                     style = MaterialTheme.typography.bodyMedium,
@@ -4574,24 +4670,76 @@ fun SidebarContent(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                                             ) {
-                                                listOf(
-                                                    "←" to { viewModel.updateItemPosition(selectedItem, -10f, 0f) },
-                                                    "→" to { viewModel.updateItemPosition(selectedItem, 10f, 0f) },
-                                                    "↑" to { viewModel.updateItemPosition(selectedItem, 0f, -10f) },
-                                                    "↓" to { viewModel.updateItemPosition(selectedItem, 0f, 10f) }
-                                                ).forEach { (label, onClick) ->
-                                                    OutlinedButton(
-                                                        onClick = onClick,
-                                                        contentPadding = PaddingValues(0.dp),
-                                                        modifier = Modifier.weight(1f).height(28.dp),
-                                                        shape = RoundedCornerShape(6.dp),
-                                                        colors = ButtonDefaults.outlinedButtonColors(
-                                                            contentColor = MaterialTheme.colorScheme.primary
-                                                        ),
-                                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
-                                                    ) {
-                                                        Text(label, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                                    }
+                                                // Left Button
+                                                OutlinedButton(
+                                                    onClick = { viewModel.updateItemPosition(selectedItem, -10f, 0f) },
+                                                    contentPadding = PaddingValues(0.dp),
+                                                    modifier = Modifier.weight(1f).height(32.dp),
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    colors = ButtonDefaults.outlinedButtonColors(
+                                                        contentColor = MaterialTheme.colorScheme.primary
+                                                    ),
+                                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.ArrowBack,
+                                                        contentDescription = "Move Left",
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+
+                                                // Right Button
+                                                OutlinedButton(
+                                                    onClick = { viewModel.updateItemPosition(selectedItem, 10f, 0f) },
+                                                    contentPadding = PaddingValues(0.dp),
+                                                    modifier = Modifier.weight(1f).height(32.dp),
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    colors = ButtonDefaults.outlinedButtonColors(
+                                                        contentColor = MaterialTheme.colorScheme.primary
+                                                    ),
+                                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.ArrowForward,
+                                                        contentDescription = "Move Right",
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+
+                                                // Up Button
+                                                OutlinedButton(
+                                                    onClick = { viewModel.updateItemPosition(selectedItem, 0f, -10f) },
+                                                    contentPadding = PaddingValues(0.dp),
+                                                    modifier = Modifier.weight(1f).height(32.dp),
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    colors = ButtonDefaults.outlinedButtonColors(
+                                                        contentColor = MaterialTheme.colorScheme.primary
+                                                    ),
+                                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.ArrowUpward,
+                                                        contentDescription = "Move Up",
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+
+                                                // Down Button
+                                                OutlinedButton(
+                                                    onClick = { viewModel.updateItemPosition(selectedItem, 0f, 10f) },
+                                                    contentPadding = PaddingValues(0.dp),
+                                                    modifier = Modifier.weight(1f).height(32.dp),
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    colors = ButtonDefaults.outlinedButtonColors(
+                                                        contentColor = MaterialTheme.colorScheme.primary
+                                                    ),
+                                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.ArrowDownward,
+                                                        contentDescription = "Move Down",
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
                                                 }
                                             }
                                         }
@@ -4678,6 +4826,22 @@ fun SidebarContent(
                                                 valueRange = 0f..360f,
                                                 modifier = Modifier.fillMaxWidth()
                                             )
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                listOf(0f, 90f, 180f, 270f).forEach { angle ->
+                                                    val isSelected = selectedItem.rotation.roundToInt() == angle.roundToInt()
+                                                    AssistChip(
+                                                        onClick = { viewModel.updateItemAbsoluteRotation(selectedItem, angle) },
+                                                        label = { Text("${angle.roundToInt()}°", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
+                                                        colors = AssistChipDefaults.assistChipColors(
+                                                            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                                            labelColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    )
+                                                }
+                                            }
                                         }
 
                                         // 4. Image Filters & Locks (Grayscale, Flips, Pins)
@@ -4821,7 +4985,7 @@ fun SidebarContent(
                                             ) {
                                                 Icon(Icons.Default.CenterFocusStrong, contentDescription = null, modifier = Modifier.size(14.dp))
                                                 Spacer(modifier = Modifier.width(4.dp))
-                                                Text("Center Camera", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                Text("Center", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                             }
 
                                             Button(
@@ -4868,7 +5032,7 @@ fun SidebarContent(
                         )
                     }
 
-                    // Section 5: Reference Images (Layers)
+                    // Section 5: Reference Images (Layers list with Thumbnails!)
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         SidebarSectionHeader(
                             title = "IMAGES ON BOARD (${canvasItems.size})",
@@ -4917,74 +5081,111 @@ fun SidebarContent(
                                     verticalArrangement = Arrangement.spacedBy(6.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    canvasItems.forEachIndexed { index, item ->
-                                        val isSelected = viewModel.selectedItemId.value == item.id
-                                        Surface(
-                                            shape = RoundedCornerShape(12.dp),
-                                            color = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer,
-                                            border = BorderStroke(
-                                                1.dp,
-                                                if (isSelected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                                            ),
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clip(RoundedCornerShape(12.dp))
-                                                .clickable {
-                                                    viewModel.selectItem(item.id)
-                                                    viewModel.centerOnItem(item, viewportWidth, viewportHeight, density)
-                                                }
-                                        ) {
-                                            Row(
+                                    val filteredItems = canvasItems.mapIndexed { index, item -> index to item }
+
+                                    filteredItems.forEach { (index, item) ->
+                                            val isSelected = selectedItemId == item.id
+                                            Surface(
+                                                shape = RoundedCornerShape(12.dp),
+                                                color = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+                                                border = BorderStroke(
+                                                    1.dp,
+                                                    if (isSelected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                                                ),
                                                 modifier = Modifier
                                                     .fillMaxWidth()
-                                                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.SpaceBetween
+                                                    .clip(RoundedCornerShape(12.dp))
+                                                    .clickable {
+                                                        viewModel.selectItem(item.id)
+                                                        viewModel.centerOnItem(item, viewportWidth, viewportHeight, density)
+                                                    }
                                             ) {
                                                 Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(horizontal = 10.dp, vertical = 6.dp),
                                                     verticalAlignment = Alignment.CenterVertically,
-                                                    modifier = Modifier.weight(1f)
+                                                    horizontalArrangement = Arrangement.SpaceBetween
                                                 ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Image,
-                                                        contentDescription = null,
-                                                        tint = if (isSelected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                    Spacer(modifier = Modifier.width(8.dp))
-                                                    Text(
-                                                        text = "Image #${index + 1} (${(item.scale * 100).roundToInt()}%)",
-                                                        color = MaterialTheme.colorScheme.onSurface,
-                                                        style = MaterialTheme.typography.bodyMedium,
-                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                                        maxLines = 1,
-                                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                                    )
-                                                }
-
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(2.dp)
-                                                ) {
-                                                    if (item.isPinned) {
-                                                        Icon(
-                                                            imageVector = Icons.Default.PushPin,
-                                                            contentDescription = "Pinned",
-                                                            tint = MaterialTheme.colorScheme.primary,
-                                                            modifier = Modifier.size(12.dp)
-                                                        )
-                                                    }
-                                                    // Delete Item icon for quick access
-                                                    IconButton(
-                                                        onClick = { viewModel.deleteItem(item) },
-                                                        modifier = Modifier.size(24.dp)
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        modifier = Modifier.weight(1f)
                                                     ) {
-                                                        Icon(
-                                                            imageVector = Icons.Default.Delete,
-                                                            contentDescription = "Delete Image",
-                                                            tint = MaterialTheme.colorScheme.error,
-                                                            modifier = Modifier.size(14.dp)
-                                                        )
+                                                        // High-fidelity dynamic image thumbnail inside layer row!
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .size(36.dp)
+                                                                .clip(RoundedCornerShape(6.dp))
+                                                                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                                                                .border(
+                                                                    1.dp,
+                                                                    if (isSelected) MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                                                                    RoundedCornerShape(6.dp)
+                                                                ),
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            AsyncImage(
+                                                                model = ImageRequest.Builder(LocalContext.current)
+                                                                    .data(item.thumbPath)
+                                                                    .crossfade(true)
+                                                                    .build(),
+                                                                contentDescription = "Image Preview",
+                                                                contentScale = ContentScale.Crop,
+                                                                modifier = Modifier.fillMaxSize()
+                                                            )
+                                                        }
+                                                        
+                                                        Spacer(modifier = Modifier.width(10.dp))
+                                                        
+                                                        Column {
+                                                            Text(
+                                                                text = "Image #${index + 1}",
+                                                                color = MaterialTheme.colorScheme.onSurface,
+                                                                style = MaterialTheme.typography.bodyMedium,
+                                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                                maxLines = 1,
+                                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                            )
+                                                            Text(
+                                                                text = "Scale: ${(item.scale * 100).roundToInt()}%  Rot: ${item.rotation.roundToInt()}°",
+                                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                                                                style = MaterialTheme.typography.labelSmall
+                                                            )
+                                                        }
+                                                    }
+
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                                    ) {
+                                                        if (item.isPinned) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.PushPin,
+                                                                contentDescription = "Pinned",
+                                                                tint = MaterialTheme.colorScheme.primary,
+                                                                modifier = Modifier.size(12.dp)
+                                                            )
+                                                        }
+                                                        if (item.isValuesEnabled) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Contrast,
+                                                                contentDescription = "Values Active",
+                                                                tint = MaterialTheme.colorScheme.secondary,
+                                                                modifier = Modifier.size(12.dp)
+                                                            )
+                                                        }
+                                                        // Delete Item icon for quick access
+                                                        IconButton(
+                                                            onClick = { viewModel.deleteItem(item) },
+                                                            modifier = Modifier.size(24.dp)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Delete,
+                                                                contentDescription = "Delete Image",
+                                                                tint = MaterialTheme.colorScheme.error,
+                                                                modifier = Modifier.size(14.dp)
+                                                            )
+                                                        }
                                                     }
                                                 }
                                             }
@@ -4992,7 +5193,6 @@ fun SidebarContent(
                                     }
                                 }
                             }
-                        }
                     }
                 }
             }
