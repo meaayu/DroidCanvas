@@ -35,7 +35,7 @@ DroidCanvas brings a professional reference board experience directly to your An
 
 <div align="center">
 
-| <img src="screenshots/Canvas.jpg" width="280" alt="Infinite Canvas" /> | <img src="screenshots/Gallery.jpg" width="280" alt="Gallery View" /> | <img src="screenshots/SidePanel.jpg" width="280" alt="Side Menu" /> |
+| <img src="screenshots/Canvas.jpg" width="200" alt="Infinite Canvas" /> | <img src="screenshots/Gallery.jpg" width="200" alt="Gallery View" /> | <img src="screenshots/SidePanel.jpg" width="200" alt="Side Menu" /> |
 |:---:|:---:|:---:|
 | **Infinite Canvas** | **Gallery View** | **Side Menu** |
 | Pan and zoom freely with precise manipulation tools | Browse and organize your reference collection | Quick access to creative tools & settings |
