@@ -35,9 +35,9 @@ DroidCanvas brings a professional reference board experience directly to your An
 
 | Feature | Preview |
 |---------|---------|
-| Infinite Canvas | ![Canvas](screenshots/canvas.png) |
-| Image Manipulation | ![Manipulation](screenshots/manipulation.png) |
-| Gallery View | ![Gallery](screenshots/gallery.png) |
+| Infinite Canvas | ![Canvas](screenshots/Canvas.jpg) |
+| Gallery | ![Gallery](screenshots/Gallery.jpg) |
+| Side Menu | ![SideMenu](screenshots/SidePanel.jpg) |
 
 ---
 
