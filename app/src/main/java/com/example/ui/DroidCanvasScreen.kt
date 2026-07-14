@@ -1008,7 +1008,7 @@ fun DroidCanvasScreen(
             val canRedo by viewModel.canRedo.collectAsState()
 
             androidx.compose.animation.AnimatedVisibility(
-                visible = canvasItems.isNotEmpty(),
+                visible = canvasItems.isNotEmpty() || isDrawModeEnabled,
                 enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
                 exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
                 modifier = Modifier
@@ -1033,212 +1033,351 @@ fun DroidCanvasScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // 2. Undo Button
-                        IconButton(
-                            onClick = { viewModel.undo() },
-                            enabled = canUndo,
-                            modifier = Modifier
-                                .size(40.dp)
-                                .testTag("bottom_bar_undo")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Undo,
-                                contentDescription = "Undo",
-                                tint = if (canUndo) {
-                                    if (darkTheme) Color.White else Color(0xFF2E4E80)
-                                } else {
-                                    if (darkTheme) Color(0xFF707684).copy(alpha = 0.35f) else Color(0xFF8E95A5).copy(alpha = 0.35f)
-                                },
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        // 3. Redo Button
-                        IconButton(
-                            onClick = { viewModel.redo() },
-                            enabled = canRedo,
-                            modifier = Modifier
-                                .size(40.dp)
-                                .testTag("bottom_bar_redo")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Redo,
-                                contentDescription = "Redo",
-                                tint = if (canRedo) {
-                                    if (darkTheme) Color.White else Color(0xFF2E4E80)
-                                } else {
-                                    if (darkTheme) Color(0xFF707684).copy(alpha = 0.35f) else Color(0xFF8E95A5).copy(alpha = 0.35f)
-                                },
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        // Divider 2
-                        Box(
-                            modifier = Modifier
-                                .width(1.dp)
-                                .height(24.dp)
-                                .background(if (darkTheme) Color(0xFF32363F) else Color(0xFFDCDFE7))
-                        )
-
-                        // Multi-Select Toggle Button
-                        IconButton(
-                            onClick = { viewModel.toggleMultiSelectMode() },
-                            modifier = Modifier
-                                .size(40.dp)
-                                .testTag("bottom_bar_multiselect_toggle")
-                        ) {
-                            Icon(
-                                imageVector = if (isMultiSelectMode) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
-                                contentDescription = "Multi-Select Mode",
-                                tint = if (isMultiSelectMode) {
-                                    if (darkTheme) MaterialTheme.colorScheme.primary else Color(0xFF2E4E80)
-                                } else {
-                                    if (darkTheme) Color(0xFF707684) else Color(0xFF8E95A5)
-                                },
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-
-                        // Divider 2.5
-                        Box(
-                            modifier = Modifier
-                                .width(1.dp)
-                                .height(24.dp)
-                                .background(if (darkTheme) Color(0xFF32363F) else Color(0xFFDCDFE7))
-                        )
-
-                        // 4. Grid Arrangement Button (Image Layout)
-                        var showBottomBarLayoutMenu by remember { mutableStateOf(false) }
-                        Box {
+                        if (isDrawModeEnabled) {
+                            // 1. Drawing Session Active controls
+                            // A. Undo Button
                             IconButton(
-                                onClick = { showBottomBarLayoutMenu = true },
+                                onClick = { viewModel.undo() },
+                                enabled = canUndo,
                                 modifier = Modifier
                                     .size(40.dp)
-                                    .testTag("bottom_bar_grid_arrange")
+                                    .testTag("bottom_bar_undo")
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.GridView,
-                                    contentDescription = "Auto Arrange Grid",
-                                    tint = if (darkTheme) MaterialTheme.colorScheme.primary else Color(0xFF2E4E80),
+                                    imageVector = Icons.Default.Undo,
+                                    contentDescription = "Undo",
+                                    tint = if (canUndo) {
+                                        if (darkTheme) Color.White else Color(0xFF2E4E80)
+                                    } else {
+                                        if (darkTheme) Color(0xFF707684).copy(alpha = 0.35f) else Color(0xFF8E95A5).copy(alpha = 0.35f)
+                                    },
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
 
-                            DropdownMenu(
-                                expanded = showBottomBarLayoutMenu,
-                                onDismissRequest = { showBottomBarLayoutMenu = false },
-                                shape = RoundedCornerShape(20.dp),
+                            // B. Redo Button
+                            IconButton(
+                                onClick = { viewModel.redo() },
+                                enabled = canRedo,
                                 modifier = Modifier
-                                    .background(if (darkTheme) Color(0xFF1E2127) else Color(0xFFEFF1F6))
-                                    .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)), shape = RoundedCornerShape(20.dp))
+                                    .size(40.dp)
+                                    .testTag("bottom_bar_redo")
                             ) {
-                                Text(
-                                    text = "IMAGE LAYOUTS",
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                                    fontSize = 10.sp,
-                                    color = if (darkTheme) MaterialTheme.colorScheme.primary else Color(0xFF2E4E80),
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 1.sp
-                                )
-                                DropdownMenuItem(
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.GridView,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp),
-                                            tint = if (darkTheme) Color.White else Color(0xFF2E4E80)
-                                        )
+                                Icon(
+                                    imageVector = Icons.Default.Redo,
+                                    contentDescription = "Redo",
+                                    tint = if (canRedo) {
+                                        if (darkTheme) Color.White else Color(0xFF2E4E80)
+                                    } else {
+                                        if (darkTheme) Color(0xFF707684).copy(alpha = 0.35f) else Color(0xFF8E95A5).copy(alpha = 0.35f)
                                     },
-                                    text = { Text("Perfect Grid", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (darkTheme) Color.White else Color.Black) },
-                                    onClick = {
-                                        viewModel.autoArrangeGrid("GRID", density.density)
-                                        showBottomBarLayoutMenu = false
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.ViewStream,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp),
-                                            tint = if (darkTheme) Color.White else Color(0xFF2E4E80)
-                                        )
-                                    },
-                                    text = { Text("Horizontal Strip", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (darkTheme) Color.White else Color.Black) },
-                                    onClick = {
-                                        viewModel.autoArrangeGrid("STRIP", density.density)
-                                        showBottomBarLayoutMenu = false
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.FormatAlignJustify,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp),
-                                            tint = if (darkTheme) Color.White else Color(0xFF2E4E80)
-                                        )
-                                    },
-                                    text = { Text("Vertical Column", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (darkTheme) Color.White else Color.Black) },
-                                    onClick = {
-                                        viewModel.autoArrangeGrid("COLUMN", density.density)
-                                        showBottomBarLayoutMenu = false
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.CenterFocusStrong,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp),
-                                            tint = if (darkTheme) Color.White else Color(0xFF2E4E80)
-                                        )
-                                    },
-                                    text = { Text("Circular Radial", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (darkTheme) Color.White else Color.Black) },
-                                    onClick = {
-                                        viewModel.autoArrangeGrid("RADIAL", density.density)
-                                        showBottomBarLayoutMenu = false
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Default.Layers,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp),
-                                            tint = if (darkTheme) Color.White else Color(0xFF2E4E80)
-                                        )
-                                    },
-                                    text = { Text("Moodboard Spread", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (darkTheme) Color.White else Color.Black) },
-                                    onClick = {
-                                        viewModel.autoArrangeGrid("SPREAD", density.density)
-                                        showBottomBarLayoutMenu = false
-                                    }
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
-                        }
 
-                        // 5. Large Circular Add Button
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(if (darkTheme) MaterialTheme.colorScheme.primary else Color(0xFF2E4E80))
-                                .clickable {
-                                    pickerLauncher.launch(
-                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            // Divider
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(24.dp)
+                                    .background(if (darkTheme) Color(0xFF32363F) else Color(0xFFDCDFE7))
+                            )
+
+                            // C. Pen Tool Toggle
+                            val isEraserMode = viewModel.isEraserModeEnabled
+                            IconButton(
+                                onClick = { viewModel.isEraserModeEnabled = false },
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .testTag("bottom_bar_pen_toggle")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = "Pen Tool",
+                                    tint = if (!isEraserMode) {
+                                        if (darkTheme) MaterialTheme.colorScheme.primary else Color(0xFF2E4E80)
+                                    } else {
+                                        if (darkTheme) Color(0xFF707684) else Color(0xFF8E95A5)
+                                    },
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            // D. Eraser Tool Toggle
+                            IconButton(
+                                onClick = { viewModel.isEraserModeEnabled = true },
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .testTag("bottom_bar_eraser_toggle")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Contrast,
+                                    contentDescription = "Eraser Tool",
+                                    tint = if (isEraserMode) {
+                                        if (darkTheme) MaterialTheme.colorScheme.primary else Color(0xFF2E4E80)
+                                    } else {
+                                        if (darkTheme) Color(0xFF707684) else Color(0xFF8E95A5)
+                                    },
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            // Divider
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(24.dp)
+                                    .background(if (darkTheme) Color(0xFF32363F) else Color(0xFFDCDFE7))
+                            )
+
+                            // E. Clear drawings button
+                            IconButton(
+                                onClick = { viewModel.clearDrawingStrokes() },
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .testTag("bottom_bar_clear_drawings")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Clear Drawings",
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            // Divider
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(24.dp)
+                                    .background(if (darkTheme) Color(0xFF32363F) else Color(0xFFDCDFE7))
+                            )
+
+                            // F. Exit Drawing Session Button
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                                    .background(if (darkTheme) Color(0xFFE53935) else Color(0xFFD32F2F))
+                                    .clickable { viewModel.isDrawModeEnabled = false }
+                                    .testTag("bottom_bar_exit_drawing"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Exit Drawing Mode",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        } else {
+                            // 2. Undo Button
+                            IconButton(
+                                onClick = { viewModel.undo() },
+                                enabled = canUndo,
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .testTag("bottom_bar_undo")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Undo,
+                                    contentDescription = "Undo",
+                                    tint = if (canUndo) {
+                                        if (darkTheme) Color.White else Color(0xFF2E4E80)
+                                    } else {
+                                        if (darkTheme) Color(0xFF707684).copy(alpha = 0.35f) else Color(0xFF8E95A5).copy(alpha = 0.35f)
+                                    },
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            // 3. Redo Button
+                            IconButton(
+                                onClick = { viewModel.redo() },
+                                enabled = canRedo,
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .testTag("bottom_bar_redo")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Redo,
+                                    contentDescription = "Redo",
+                                    tint = if (canRedo) {
+                                        if (darkTheme) Color.White else Color(0xFF2E4E80)
+                                    } else {
+                                        if (darkTheme) Color(0xFF707684).copy(alpha = 0.35f) else Color(0xFF8E95A5).copy(alpha = 0.35f)
+                                    },
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            // Divider 2
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(24.dp)
+                                    .background(if (darkTheme) Color(0xFF32363F) else Color(0xFFDCDFE7))
+                            )
+
+                            // Multi-Select Toggle Button
+                            IconButton(
+                                onClick = { viewModel.toggleMultiSelectMode() },
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .testTag("bottom_bar_multiselect_toggle")
+                            ) {
+                                Icon(
+                                    imageVector = if (isMultiSelectMode) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
+                                    contentDescription = "Multi-Select Mode",
+                                    tint = if (isMultiSelectMode) {
+                                        if (darkTheme) MaterialTheme.colorScheme.primary else Color(0xFF2E4E80)
+                                    } else {
+                                        if (darkTheme) Color(0xFF707684) else Color(0xFF8E95A5)
+                                    },
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            // Divider 2.5
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(24.dp)
+                                    .background(if (darkTheme) Color(0xFF32363F) else Color(0xFFDCDFE7))
+                            )
+
+                            // 4. Grid Arrangement Button (Image Layout)
+                            var showBottomBarLayoutMenu by remember { mutableStateOf(false) }
+                            Box {
+                                IconButton(
+                                    onClick = { showBottomBarLayoutMenu = true },
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .testTag("bottom_bar_grid_arrange")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.GridView,
+                                        contentDescription = "Auto Arrange Grid",
+                                        tint = if (darkTheme) MaterialTheme.colorScheme.primary else Color(0xFF2E4E80),
+                                        modifier = Modifier.size(20.dp)
                                     )
                                 }
-                                .testTag("bottom_bar_add_image"),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = "Add Images",
-                                tint = if (darkTheme) MaterialTheme.colorScheme.onPrimary else Color.White,
-                                modifier = Modifier.size(24.dp)
-                            )
+
+                                DropdownMenu(
+                                    expanded = showBottomBarLayoutMenu,
+                                    onDismissRequest = { showBottomBarLayoutMenu = false },
+                                    shape = RoundedCornerShape(20.dp),
+                                    modifier = Modifier
+                                        .background(if (darkTheme) Color(0xFF1E2127) else Color(0xFFEFF1F6))
+                                        .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)), shape = RoundedCornerShape(20.dp))
+                                ) {
+                                    Text(
+                                        text = "IMAGE LAYOUTS",
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                        fontSize = 10.sp,
+                                        color = if (darkTheme) MaterialTheme.colorScheme.primary else Color(0xFF2E4E80),
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 1.sp
+                                    )
+                                    DropdownMenuItem(
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.GridView,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp),
+                                                tint = if (darkTheme) Color.White else Color(0xFF2E4E80)
+                                            )
+                                        },
+                                        text = { Text("Perfect Grid", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (darkTheme) Color.White else Color.Black) },
+                                        onClick = {
+                                            viewModel.autoArrangeGrid("GRID", density.density)
+                                            showBottomBarLayoutMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.ViewStream,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp),
+                                                tint = if (darkTheme) Color.White else Color(0xFF2E4E80)
+                                            )
+                                        },
+                                        text = { Text("Horizontal Strip", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (darkTheme) Color.White else Color.Black) },
+                                        onClick = {
+                                            viewModel.autoArrangeGrid("STRIP", density.density)
+                                            showBottomBarLayoutMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.FormatAlignJustify,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp),
+                                                tint = if (darkTheme) Color.White else Color(0xFF2E4E80)
+                                            )
+                                        },
+                                        text = { Text("Vertical Column", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (darkTheme) Color.White else Color.Black) },
+                                        onClick = {
+                                            viewModel.autoArrangeGrid("COLUMN", density.density)
+                                            showBottomBarLayoutMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.CenterFocusStrong,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp),
+                                                tint = if (darkTheme) Color.White else Color(0xFF2E4E80)
+                                            )
+                                        },
+                                        text = { Text("Circular Radial", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (darkTheme) Color.White else Color.Black) },
+                                        onClick = {
+                                            viewModel.autoArrangeGrid("RADIAL", density.density)
+                                            showBottomBarLayoutMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.Layers,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp),
+                                                tint = if (darkTheme) Color.White else Color(0xFF2E4E80)
+                                            )
+                                        },
+                                        text = { Text("Moodboard Spread", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = if (darkTheme) Color.White else Color.Black) },
+                                        onClick = {
+                                            viewModel.autoArrangeGrid("SPREAD", density.density)
+                                            showBottomBarLayoutMenu = false
+                                        }
+                                    )
+                                }
+                            }
+
+                            // 5. Large Circular Add Button
+                            Box(
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(CircleShape)
+                                    .background(if (darkTheme) MaterialTheme.colorScheme.primary else Color(0xFF2E4E80))
+                                    .clickable {
+                                        pickerLauncher.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                        )
+                                    }
+                                    .testTag("bottom_bar_add_image"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "Add Images",
+                                    tint = if (darkTheme) MaterialTheme.colorScheme.onPrimary else Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
                         }
                     }
                 }
