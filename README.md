@@ -74,10 +74,10 @@ cd DroidCanvas
 
 **Ongoing:**
 - [ ] Tablet optimization
-
-**Incompleted:**
 - [ ] Crop tool
 - [ ] Export/Import project file
+
+**Incompleted:**
 - [ ] Undo/redo Gesture
 
 ---
