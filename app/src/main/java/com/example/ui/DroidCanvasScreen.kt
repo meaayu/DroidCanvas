@@ -356,33 +356,39 @@ fun DroidCanvasScreen(
                         .padding(bottom = innerPadding.calculateBottomPadding())
                 ) {
                     Row(modifier = Modifier.fillMaxSize()) {
-                        if (isWideScreen && isSidebarExpanded) {
-                    SidebarContent(
-                        viewModel = viewModel,
-                        viewportWidth = viewportWidth,
-                        viewportHeight = viewportHeight,
-                        density = density.density,
-                        pickerLauncher = pickerLauncher,
-                        onCloseSidebar = { isSidebarExpanded = false },
-                        onCreateBoardClick = { showCreateBoardDialog = true },
-                        onRenameBoardClick = { b ->
-                            renamingBoard = b
-                            renamingBoardName = b.name
-                        },
-                        onManageBoardsClick = { showManageBoardsDialog = true },
-                        onSettingsClick = { showSettingsDialog = true },
-                        modifier = Modifier
-                            .width(300.dp)
-                            .fillMaxHeight()
-                    )
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = isWideScreen && isSidebarExpanded,
+                            enter = androidx.compose.animation.slideInHorizontally(initialOffsetX = { -it }) + androidx.compose.animation.fadeIn(),
+                            exit = androidx.compose.animation.slideOutHorizontally(targetOffsetX = { -it }) + androidx.compose.animation.fadeOut()
+                        ) {
+                            Row(modifier = Modifier.fillMaxHeight().width(301.dp)) {
+                                SidebarContent(
+                                    viewModel = viewModel,
+                                    viewportWidth = viewportWidth,
+                                    viewportHeight = viewportHeight,
+                                    density = density.density,
+                                    pickerLauncher = pickerLauncher,
+                                    onCloseSidebar = { isSidebarExpanded = false },
+                                    onCreateBoardClick = { showCreateBoardDialog = true },
+                                    onRenameBoardClick = { b ->
+                                        renamingBoard = b
+                                        renamingBoardName = b.name
+                                    },
+                                    onManageBoardsClick = { showManageBoardsDialog = true },
+                                    onSettingsClick = { showSettingsDialog = true },
+                                    modifier = Modifier
+                                        .width(300.dp)
+                                        .fillMaxHeight()
+                                )
 
-                    Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .width(1.dp)
-                            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                    )
-                }
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .width(1.dp)
+                                        .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                                )
+                            }
+                        }
 
                 Box(
                     modifier = Modifier
@@ -1033,7 +1039,16 @@ fun DroidCanvasScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (isDrawModeEnabled) {
+                        androidx.compose.animation.Crossfade(
+                            targetState = isDrawModeEnabled,
+                            animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+                            label = "bottom_bar_mode_transition"
+                        ) { drawModeActive ->
+                            if (drawModeActive) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                             // 1. Drawing Session Active controls
                             // A. Undo Button
                             IconButton(
@@ -1170,7 +1185,12 @@ fun DroidCanvasScreen(
                                     modifier = Modifier.size(24.dp)
                                 )
                             }
-                        } else {
+                                }
+                            } else {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                             // 2. Undo Button
                             IconButton(
                                 onClick = { viewModel.undo() },
@@ -1378,6 +1398,8 @@ fun DroidCanvasScreen(
                                     modifier = Modifier.size(24.dp)
                                 )
                             }
+                                }
+                            }
                         }
                     }
                 }
@@ -1515,15 +1537,23 @@ fun DroidCanvasScreen(
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = activeBoard?.name ?: "Loading...",
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f)
-                                )
+                                Box(modifier = Modifier.weight(1f)) {
+                                    androidx.compose.animation.Crossfade(
+                                        targetState = activeBoard?.name ?: "Loading...",
+                                        animationSpec = androidx.compose.animation.core.tween(durationMillis = 200, easing = androidx.compose.animation.core.FastOutSlowInEasing),
+                                        label = "board_name_transition"
+                                    ) { targetName ->
+                                        Text(
+                                            text = targetName,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                }
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Icon(
                                     Icons.Default.KeyboardArrowDown,
@@ -4060,7 +4090,12 @@ fun SidebarContent(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            when (selectedTab) {
+            androidx.compose.animation.Crossfade(
+                targetState = selectedTab,
+                animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
+                label = "sidebar_tab_transition"
+            ) { tab ->
+                when (tab) {
                 SidebarTab.BOARD -> {
                     // Section 2: Workspace Boards (Quick Selection List)
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -4465,6 +4500,17 @@ fun SidebarContent(
                                             ),
                                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                                         ) {
+                                            val animatedBrushSize by animateDpAsState(
+                                                targetValue = currentWidth.coerceIn(2f, 40f).dp,
+                                                animationSpec = spring(stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow),
+                                                label = "live_brush_size"
+                                            )
+                                            val animatedBrushColor by animateColorAsState(
+                                                targetValue = Color(currentColor),
+                                                animationSpec = androidx.compose.animation.core.tween(durationMillis = 200),
+                                                label = "live_brush_color"
+                                            )
+
                                             Row(
                                                 modifier = Modifier
                                                     .fillMaxSize()
@@ -4488,20 +4534,26 @@ fun SidebarContent(
                                                         ),
                                                     contentAlignment = Alignment.Center
                                                 ) {
-                                                    if (!isEraserModeEnabled) {
-                                                        Box(
-                                                            modifier = Modifier
-                                                                .size(currentWidth.coerceIn(2f, 40f).dp)
-                                                                .clip(CircleShape)
-                                                                .background(Color(currentColor))
-                                                        )
-                                                    } else {
-                                                        Icon(
-                                                            imageVector = Icons.Default.Layers,
-                                                            contentDescription = "Eraser Tip",
-                                                            tint = MaterialTheme.colorScheme.primary,
-                                                            modifier = Modifier.size(20.dp)
-                                                        )
+                                                    androidx.compose.animation.Crossfade(
+                                                        targetState = isEraserModeEnabled,
+                                                        animationSpec = androidx.compose.animation.core.tween(durationMillis = 250),
+                                                        label = "live_brush_type"
+                                                    ) { isEraser ->
+                                                        if (!isEraser) {
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .size(animatedBrushSize)
+                                                                    .clip(CircleShape)
+                                                                    .background(animatedBrushColor)
+                                                            )
+                                                        } else {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Layers,
+                                                                contentDescription = "Eraser Tip",
+                                                                tint = MaterialTheme.colorScheme.primary,
+                                                                modifier = Modifier.size(20.dp)
+                                                            )
+                                                        }
                                                     }
                                                 }
                                             }
@@ -5346,6 +5398,7 @@ fun SidebarContent(
                     }
                 }
             }
+        }
         }
     }
 }
