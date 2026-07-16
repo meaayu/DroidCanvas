@@ -82,6 +82,12 @@ interface DroidCanvasDao {
     @Query("SELECT * FROM canvas_items WHERE boardId = :boardId ORDER BY zIndex ASC")
     fun getItemsForBoard(boardId: Int): Flow<List<CanvasItem>>
 
+    @Query("SELECT * FROM canvas_items WHERE boardId = :boardId ORDER BY zIndex ASC LIMIT :limit OFFSET :offset")
+    fun getItemsForBoardPaginated(boardId: Int, limit: Int, offset: Int): Flow<List<CanvasItem>>
+
+    @Query("SELECT * FROM canvas_items WHERE boardId = :boardId AND (posX + width * scale) >= :minX AND posX <= :maxX AND (posY + height * scale) >= :minY AND posY <= :maxY ORDER BY zIndex ASC")
+    fun getItemsInRegion(boardId: Int, minX: Float, maxX: Float, minY: Float, maxY: Float): Flow<List<CanvasItem>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCanvasItem(item: CanvasItem): Long
 
@@ -221,6 +227,12 @@ class DroidCanvasRepository(private val dao: DroidCanvasDao) {
     suspend fun deleteBoard(board: Board) = dao.deleteBoard(board)
 
     fun getItemsForBoard(boardId: Int): Flow<List<CanvasItem>> = dao.getItemsForBoard(boardId)
+
+    fun getItemsForBoardPaginated(boardId: Int, limit: Int, offset: Int): Flow<List<CanvasItem>> =
+        dao.getItemsForBoardPaginated(boardId, limit, offset)
+
+    fun getItemsInRegion(boardId: Int, minX: Float, maxX: Float, minY: Float, maxY: Float): Flow<List<CanvasItem>> =
+        dao.getItemsInRegion(boardId, minX, maxX, minY, maxY)
 
     suspend fun insertCanvasItem(item: CanvasItem): Long = dao.insertCanvasItem(item)
 
