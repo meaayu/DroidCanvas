@@ -40,12 +40,9 @@ import java.io.FileOutputStream
 import java.util.UUID
 import kotlin.math.roundToInt
 
-data class DrawingStroke(
-    val id: String = UUID.randomUUID().toString(),
-    val points: List<Offset>,
-    val color: Int,
-    val strokeWidth: Float
-)
+import com.example.ui.state.*
+
+typealias DrawingStroke = com.example.ui.state.DrawingStroke
 
 data class ValuesResult(
     val processedBitmap: Bitmap,
@@ -61,15 +58,60 @@ class DroidCanvasViewModel(
     private val appContext = context.applicationContext
     private val prefs = context.getSharedPreferences("canvas_view_prefs", Context.MODE_PRIVATE)
 
-    // List of all boards
-    val boards: StateFlow<List<Board>> = repository.allBoards
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+    // NEW state holders
+    val transformState = CanvasTransformStateHolder(
+        scope = viewModelScope,
+        prefs = prefs,
+        getCurrentBoardId = { _currentBoardId.value }
+    )
 
-    // Current active board ID
+    val drawingState = DrawingStateHolder(
+        scope = viewModelScope,
+        context = appContext,
+        getCurrentBoardId = { _currentBoardId.value },
+        updateUndoRedoAvailability = { updateUndoRedoAvailability() }
+    )
+
+    val selectionState = SelectionStateHolder(
+        scope = viewModelScope,
+        repository = repository,
+        getCanvasItems = { canvasItems.value },
+        saveCurrentStateToUndo = { saveCurrentStateToUndo() },
+        isLocked = { isLocked }
+    )
+
+    val boardState = BoardStateHolder(
+        scope = viewModelScope,
+        repository = repository,
+        onBoardSwitched = { boardId ->
+            _loadedBoardId.value = null // Reset loaded ID immediately to trigger isLoaded = false during transition
+            _currentBoardId.value = boardId
+            _itemOverrides.value = emptyMap()
+            if (boardId != null) {
+                transformState.resetTransform(
+                    scale = prefs.getFloat("board_scale_$boardId", 1f),
+                    translateX = prefs.getFloat("board_trans_x_$boardId", 0f),
+                    translateY = prefs.getFloat("board_trans_y_$boardId", 0f)
+                )
+                viewModelScope.launch(Dispatchers.IO) {
+                    val strokes = drawingState.loadDrawingStrokes(boardId)
+                    withContext(Dispatchers.Main) {
+                        drawingState.setStrokes(strokes)
+                    }
+                }
+            } else {
+                transformState.resetTransform()
+                drawingState.setStrokes(emptyList())
+            }
+            undoStack.clear()
+            redoStack.clear()
+            drawingState.clearStacks()
+            updateUndoRedoAvailability()
+        }
+    )
+
+    // Delegate properties for Board State
+    val boards: StateFlow<List<Board>> get() = boardState.boards
     private val _currentBoardId = MutableStateFlow<Int?>(null)
     val currentBoardId: StateFlow<Int?> = _currentBoardId.asStateFlow()
 
@@ -127,10 +169,6 @@ class DroidCanvasViewModel(
     private val undoStack = mutableListOf<List<CanvasItem>>()
     private val redoStack = mutableListOf<List<CanvasItem>>()
 
-    // Drawing Undo/Redo Stacks
-    private val drawingUndoStack = mutableListOf<List<DrawingStroke>>()
-    private val drawingRedoStack = mutableListOf<List<DrawingStroke>>()
-
     // Expose undo/redo availability state to the UI
     private val _canUndo = MutableStateFlow(false)
     val canUndo: StateFlow<Boolean> = _canUndo.asStateFlow()
@@ -139,9 +177,9 @@ class DroidCanvasViewModel(
     val canRedo: StateFlow<Boolean> = _canRedo.asStateFlow()
 
     private fun updateUndoRedoAvailability() {
-        if (_isDrawModeEnabled.value) {
-            _canUndo.value = drawingUndoStack.isNotEmpty()
-            _canRedo.value = drawingRedoStack.isNotEmpty()
+        if (drawingState.isDrawModeEnabled) {
+            _canUndo.value = drawingState.drawingUndoStack.isNotEmpty()
+            _canRedo.value = drawingState.drawingRedoStack.isNotEmpty()
         } else {
             _canUndo.value = undoStack.isNotEmpty()
             _canRedo.value = redoStack.isNotEmpty()
@@ -158,22 +196,11 @@ class DroidCanvasViewModel(
         updateUndoRedoAvailability()
     }
 
-    fun saveDrawingStateToUndo() {
-        val currentStrokes = _drawingStrokes.value.map { it.copy() }
-        drawingUndoStack.add(currentStrokes)
-        if (drawingUndoStack.size > 50) {
-            drawingUndoStack.removeAt(0)
-        }
-        drawingRedoStack.clear()
-        updateUndoRedoAvailability()
-    }
-
     fun undo() {
-        if (_isDrawModeEnabled.value) {
-            undoDrawing()
+        if (drawingState.isDrawModeEnabled) {
+            drawingState.undoDrawing()
             return
         }
-        val boardId = _currentBoardId.value ?: return
         if (undoStack.isEmpty()) return
         
         val previousState = undoStack.removeAt(undoStack.size - 1)
@@ -185,11 +212,10 @@ class DroidCanvasViewModel(
     }
 
     fun redo() {
-        if (_isDrawModeEnabled.value) {
-            redoDrawing()
+        if (drawingState.isDrawModeEnabled) {
+            drawingState.redoDrawing()
             return
         }
-        val boardId = _currentBoardId.value ?: return
         if (redoStack.isEmpty()) return
         
         val nextState = redoStack.removeAt(redoStack.size - 1)
@@ -198,32 +224,6 @@ class DroidCanvasViewModel(
         
         updateUndoRedoAvailability()
         restoreSnapshot(nextState)
-    }
-
-    private fun undoDrawing() {
-        val boardId = _currentBoardId.value ?: return
-        if (drawingUndoStack.isEmpty()) return
-        
-        val previousState = drawingUndoStack.removeAt(drawingUndoStack.size - 1)
-        val currentState = _drawingStrokes.value.map { it.copy() }
-        drawingRedoStack.add(currentState)
-        
-        _drawingStrokes.value = previousState
-        saveDrawingStrokes(boardId, previousState)
-        updateUndoRedoAvailability()
-    }
-
-    private fun redoDrawing() {
-        val boardId = _currentBoardId.value ?: return
-        if (drawingRedoStack.isEmpty()) return
-        
-        val nextState = drawingRedoStack.removeAt(drawingRedoStack.size - 1)
-        val currentState = _drawingStrokes.value.map { it.copy() }
-        drawingUndoStack.add(currentState)
-        
-        _drawingStrokes.value = nextState
-        saveDrawingStrokes(boardId, nextState)
-        updateUndoRedoAvailability()
     }
 
     private fun restoreSnapshot(targetState: List<CanvasItem>) {
@@ -254,247 +254,71 @@ class DroidCanvasViewModel(
         }
     }
 
-    private var isCenteringAnimated = false
-
-    // Canvas view states (panned and zoomed) with debounced database persistence
-    private var _canvasScale = mutableStateOf(1f)
+    // Delegate properties for Canvas Transform State
+    val isCenteringAnimated: Boolean get() = transformState.isCenteringAnimated
     var canvasScale: Float
-        get() = _canvasScale.value
-        set(value) {
-            if (_canvasScale.value != value) {
-                if (!isCenteringAnimated) {
-                    cancelCentering()
-                }
-                _canvasScale.value = value
-                schedulePersistCanvasState()
-            }
-        }
-
-    private var _canvasTranslateX = mutableStateOf(0f)
+        get() = transformState.canvasScale
+        set(value) { transformState.canvasScale = value }
     var canvasTranslateX: Float
-        get() = _canvasTranslateX.value
-        set(value) {
-            if (_canvasTranslateX.value != value) {
-                if (!isCenteringAnimated) {
-                    cancelCentering()
-                }
-                _canvasTranslateX.value = value
-                schedulePersistCanvasState()
-            }
-        }
-
-    private var _canvasTranslateY = mutableStateOf(0f)
+        get() = transformState.canvasTranslateX
+        set(value) { transformState.canvasTranslateX = value }
     var canvasTranslateY: Float
-        get() = _canvasTranslateY.value
-        set(value) {
-            if (_canvasTranslateY.value != value) {
-                if (!isCenteringAnimated) {
-                    cancelCentering()
-                }
-                _canvasTranslateY.value = value
-                schedulePersistCanvasState()
-            }
-        }
+        get() = transformState.canvasTranslateY
+        set(value) { transformState.canvasTranslateY = value }
 
-    private var persistJob: kotlinx.coroutines.Job? = null
+    fun cancelCentering() = transformState.cancelCentering()
+    fun centerOnItem(item: CanvasItem, viewportWidth: Float, viewportHeight: Float, density: Float) =
+        transformState.centerOnItem(item, viewportWidth, viewportHeight, density) { selectItem(it) }
 
-    private fun schedulePersistCanvasState() {
-        val boardId = _currentBoardId.value ?: return
-        persistJob?.cancel()
-        persistJob = viewModelScope.launch(Dispatchers.IO) {
-            kotlinx.coroutines.delay(1000)
-            prefs.edit()
-                .putFloat("board_scale_$boardId", canvasScale)
-                .putFloat("board_trans_x_$boardId", canvasTranslateX)
-                .putFloat("board_trans_y_$boardId", canvasTranslateY)
-                .apply()
-        }
-    }
+    // Delegate properties for Selection State
+    val selectedItemId: StateFlow<Int?> get() = selectionState.selectedItemId
+    val isMultiSelectMode: StateFlow<Boolean> get() = selectionState.isMultiSelectMode
+    val selectedItemIds: StateFlow<Set<Int>> get() = selectionState.selectedItemIds
 
-    // Selected item id
-    private val _selectedItemId = MutableStateFlow<Int?>(null)
-    val selectedItemId: StateFlow<Int?> = _selectedItemId.asStateFlow()
-
-    // Multi-Select Mode states
-    private val _isMultiSelectMode = MutableStateFlow(false)
-    val isMultiSelectMode: StateFlow<Boolean> = _isMultiSelectMode.asStateFlow()
-
-    private val _selectedItemIds = MutableStateFlow<Set<Int>>(emptySet())
-    val selectedItemIds: StateFlow<Set<Int>> = _selectedItemIds.asStateFlow()
-
-    fun toggleMultiSelectMode() {
-        val newMode = !_isMultiSelectMode.value
-        _isMultiSelectMode.value = newMode
-        if (newMode) {
-            // Migrate single selected item if it exists
-            _selectedItemIds.value = _selectedItemId.value?.let { setOf(it) } ?: emptySet()
-            _selectedItemId.value = null
-        } else {
-            _selectedItemIds.value = emptySet()
-        }
-    }
-
+    fun selectItem(itemId: Int?) = selectionState.selectItem(itemId)
+    fun toggleMultiSelectMode() = selectionState.toggleMultiSelectMode()
     var lastItemTapTime = 0L
+    fun clearSelection() = selectionState.clearSelection()
+    fun deleteSelectedItems() = selectionState.deleteSelectedItems()
+    fun togglePinSelectedItems() = selectionState.togglePinSelectedItems()
+    fun toggleValuesSelectedItems() = selectionState.toggleValuesSelectedItems()
 
-    fun clearSelection() {
-        _selectedItemId.value = null
-        _selectedItemIds.value = emptySet()
-    }
+    // Delegate properties and methods for Board State
+    fun createBoard(name: String) = boardState.createBoard(name)
+    fun selectBoard(boardId: Int) = boardState.selectBoard(boardId)
+    fun deleteBoard(board: Board) = boardState.deleteBoard(board)
+    fun renameBoard(board: Board, newName: String) = boardState.renameBoard(board, newName)
+    fun setCurrentBoardId(boardId: Int?) = boardState.setCurrentBoardIdDirectly(boardId)
 
-    // Drawing mode states
-    private var _isDrawModeEnabled = mutableStateOf(false)
+    // Delegate properties for Drawing State
     var isDrawModeEnabled: Boolean
-        get() = _isDrawModeEnabled.value
+        get() = drawingState.isDrawModeEnabled
         set(value) {
-            _isDrawModeEnabled.value = value
+            drawingState.isDrawModeEnabled = value
             if (value) {
-                _selectedItemId.value = null // clear selection when drawing
-                _selectedItemIds.value = emptySet()
+                selectionState.clearSelection()
             }
             updateUndoRedoAvailability()
         }
-
-    private var _isEraserModeEnabled = mutableStateOf(false)
     var isEraserModeEnabled: Boolean
-        get() = _isEraserModeEnabled.value
-        set(value) {
-            _isEraserModeEnabled.value = value
-        }
-
-    private var _drawingColor = mutableStateOf(0xFFF44336.toInt()) // Red by default
+        get() = drawingState.isEraserModeEnabled
+        set(value) { drawingState.isEraserModeEnabled = value }
     var drawingColor: Int
-        get() = _drawingColor.value
-        set(value) {
-            _drawingColor.value = value
-        }
-
-    private var _drawingWidth = mutableStateOf(8f)
+        get() = drawingState.drawingColor
+        set(value) { drawingState.drawingColor = value }
     var drawingWidth: Float
-        get() = _drawingWidth.value
-        set(value) {
-            _drawingWidth.value = value
-        }
+        get() = drawingState.drawingWidth
+        set(value) { drawingState.drawingWidth = value }
+    val drawingStrokes: StateFlow<List<DrawingStroke>> get() = drawingState.drawingStrokes
+    var activeStroke: DrawingStroke?
+        get() = drawingState.activeStroke
+        set(value) { drawingState.activeStroke = value }
 
-    // List of completed strokes
-    private val _drawingStrokes = MutableStateFlow<List<DrawingStroke>>(emptyList())
-    val drawingStrokes: StateFlow<List<DrawingStroke>> = _drawingStrokes.asStateFlow()
-
-    // Currently active stroke being drawn
-    var activeStroke by mutableStateOf<DrawingStroke?>(null)
-
-    fun startNewStroke(startPoint: Offset) {
-        val newStroke = DrawingStroke(
-            points = listOf(startPoint),
-            color = drawingColor,
-            strokeWidth = drawingWidth
-        )
-        activeStroke = newStroke
-    }
-
-    fun appendPointToActiveStroke(point: Offset) {
-        val current = activeStroke ?: return
-        activeStroke = current.copy(points = current.points + point)
-    }
-
-    fun finishActiveStroke() {
-        var stroke = activeStroke ?: return
-        if (stroke.points.size > 2) {
-            val xs = stroke.points.map { it.x }.toFloatArray()
-            val ys = stroke.points.map { it.y }.toFloatArray()
-            
-            // Apply our highly-optimized Java-based stroke simplification & smoothing
-            // Epsilon = 0.8f (simplification threshold), iterations = 2 (smoothing rounds)
-            val optimized = StrokeOptimizer.optimizeStroke(xs, ys, 0.8f, 2)
-            val optimizedXs = optimized[0]
-            val optimizedYs = optimized[1]
-            
-            val optimizedPoints = mutableListOf<Offset>()
-            for (i in optimizedXs.indices) {
-                optimizedPoints.add(Offset(optimizedXs[i], optimizedYs[i]))
-            }
-            stroke = stroke.copy(points = optimizedPoints)
-        }
-        if (stroke.points.isNotEmpty()) {
-            saveDrawingStateToUndo()
-            val updated = _drawingStrokes.value + stroke
-            _drawingStrokes.value = updated
-            val boardId = _currentBoardId.value
-            if (boardId != null) {
-                saveDrawingStrokes(boardId, updated)
-            }
-        }
-        activeStroke = null
-    }
-
-    fun eraseStrokeAt(point: Offset, threshold: Float = 30f) {
-        val updated = _drawingStrokes.value.filter { stroke ->
-            val xs = stroke.points.map { it.x }.toFloatArray()
-            val ys = stroke.points.map { it.y }.toFloatArray()
-            !StrokeOptimizer.isStrokeIntersectingPoint(xs, ys, point.x, point.y, threshold)
-        }
-        if (updated.size != _drawingStrokes.value.size) {
-            saveDrawingStateToUndo()
-            _drawingStrokes.value = updated
-            val boardId = _currentBoardId.value ?: return
-            saveDrawingStrokes(boardId, updated)
-        }
-    }
-
-    fun clearDrawingStrokes() {
-        if (_drawingStrokes.value.isNotEmpty()) {
-            saveDrawingStateToUndo()
-            _drawingStrokes.value = emptyList()
-            val boardId = _currentBoardId.value ?: return
-            saveDrawingStrokes(boardId, emptyList())
-        }
-    }
-
-    fun saveDrawingStrokes(boardId: Int, strokes: List<DrawingStroke>) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val file = File(appContext.filesDir, "drawing_strokes_$boardId.txt")
-                val content = strokes.joinToString("\n") { stroke ->
-                    val pointsStr = stroke.points.joinToString(";") { "${it.x},${it.y}" }
-                    "${stroke.id}|${stroke.color}|${stroke.strokeWidth}|$pointsStr"
-                }
-                file.writeText(content)
-            } catch (e: java.lang.Exception) {
-                Log.e(TAG, "Failed to save drawing strokes", e)
-            }
-        }
-    }
-
-    fun loadDrawingStrokes(boardId: Int): List<DrawingStroke> {
-        return try {
-            val file = File(appContext.filesDir, "drawing_strokes_$boardId.txt")
-            if (!file.exists()) return emptyList()
-            val lines = file.readLines()
-            lines.mapNotNull { line ->
-                val parts = line.split("|")
-                if (parts.size < 4) return@mapNotNull null
-                val id = parts[0]
-                val color = parts[1].toIntOrNull() ?: 0xFFF44336.toInt()
-                val strokeWidth = parts[2].toFloatOrNull() ?: 8f
-                val pointsStr = parts[3]
-                val points = if (pointsStr.isEmpty()) {
-                    emptyList()
-                } else {
-                    pointsStr.split(";").mapNotNull { p ->
-                        val coords = p.split(",")
-                        if (coords.size == 2) {
-                            val x = coords[0].toFloatOrNull()
-                            val y = coords[1].toFloatOrNull()
-                            if (x != null && y != null) Offset(x, y) else null
-                        } else null
-                    }
-                }
-                DrawingStroke(id, points, color, strokeWidth)
-            }
-        } catch (e: java.lang.Exception) {
-            Log.e(TAG, "Failed to load drawing strokes", e)
-            emptyList()
-        }
-    }
+    fun startNewStroke(startPoint: Offset) = drawingState.startNewStroke(startPoint)
+    fun appendPointToActiveStroke(point: Offset) = drawingState.appendPointToActiveStroke(point)
+    fun finishActiveStroke() = drawingState.finishActiveStroke()
+    fun eraseStrokeAt(point: Offset, threshold: Float = 30f) = drawingState.eraseStrokeAt(point, threshold)
+    fun clearDrawingStrokes() = drawingState.clearDrawingStrokes()
 
     var isLocked by mutableStateOf(false)
         private set
@@ -588,34 +412,6 @@ class DroidCanvasViewModel(
         }
     }
 
-    private fun setCurrentBoardId(boardId: Int?) {
-        persistJob?.cancel() // Cancel any pending saves when switching boards
-        _loadedBoardId.value = null // Reset loaded ID immediately to trigger isLoaded = false during transition
-        _currentBoardId.value = boardId
-        _itemOverrides.value = emptyMap()
-        if (boardId != null) {
-            _canvasScale.value = prefs.getFloat("board_scale_$boardId", 1f)
-            _canvasTranslateX.value = prefs.getFloat("board_trans_x_$boardId", 0f)
-            _canvasTranslateY.value = prefs.getFloat("board_trans_y_$boardId", 0f)
-            viewModelScope.launch(Dispatchers.IO) {
-                val strokes = loadDrawingStrokes(boardId)
-                withContext(Dispatchers.Main) {
-                    _drawingStrokes.value = strokes
-                }
-            }
-        } else {
-            _canvasScale.value = 1f
-            _canvasTranslateX.value = 0f
-            _canvasTranslateY.value = 0f
-            _drawingStrokes.value = emptyList()
-        }
-        undoStack.clear()
-        redoStack.clear()
-        drawingUndoStack.clear()
-        drawingRedoStack.clear()
-        updateUndoRedoAvailability()
-    }
-
     init {
         // Initialize with default board if none exists
         viewModelScope.launch {
@@ -626,7 +422,7 @@ class DroidCanvasViewModel(
             }
 
             val initialBoardId = currentBoards.firstOrNull()?.id
-            setCurrentBoardId(initialBoardId)
+            boardState.setCurrentBoardIdDirectly(initialBoardId)
 
             if (initialBoardId != null) {
                 // Pre-load items to verify load completion state
@@ -644,10 +440,10 @@ class DroidCanvasViewModel(
                 if (boardList.isNotEmpty()) {
                     val currentId = _currentBoardId.value
                     if (currentId == null || !boardList.any { it.id == currentId }) {
-                        setCurrentBoardId(boardList.first().id)
+                        boardState.setCurrentBoardIdDirectly(boardList.first().id)
                     }
                 } else {
-                    setCurrentBoardId(null)
+                    boardState.setCurrentBoardIdDirectly(null)
                 }
             }
         }
@@ -674,112 +470,7 @@ class DroidCanvasViewModel(
         }
     }
 
-    fun selectBoard(boardId: Int) {
-        setCurrentBoardId(boardId)
-        _selectedItemId.value = null
-    }
 
-    fun createBoard(name: String) {
-        viewModelScope.launch {
-            val newId = repository.insertBoard(Board(name = name))
-            setCurrentBoardId(newId.toInt())
-        }
-    }
-
-    fun updateBoardBackground(board: Board, backgroundType: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val updated = board.copy(backgroundType = backgroundType)
-            repository.updateBoard(updated)
-        }
-    }
-
-    fun renameBoard(board: Board, newName: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val updated = board.copy(name = newName)
-            repository.updateBoard(updated)
-        }
-    }
-
-    fun deleteBoard(board: Board) {
-        viewModelScope.launch {
-            // Delete all canvas items and files first using .first() to avoid blocking flow
-            val items = repository.getItemsForBoard(board.id).first()
-            items.forEach { item ->
-                ImageStorageHelper.deleteImageFiles(item.fullPath, item.thumbPath)
-            }
-            repository.deleteBoard(board)
-            if (_currentBoardId.value == board.id) {
-                val remaining = boards.value.filter { it.id != board.id }
-                if (remaining.isNotEmpty()) {
-                    selectBoard(remaining.first().id)
-                } else {
-                    setCurrentBoardId(null)
-                }
-            }
-        }
-    }
-
-    fun selectItem(itemId: Int?) {
-        if (isLocked) {
-            _selectedItemId.value = null
-            _selectedItemIds.value = emptySet()
-        } else {
-            if (itemId == null) {
-                _selectedItemId.value = null
-                _selectedItemIds.value = emptySet()
-            } else if (_isMultiSelectMode.value) {
-                val current = _selectedItemIds.value
-                if (current.contains(itemId)) {
-                    _selectedItemIds.value = current - itemId
-                } else {
-                    _selectedItemIds.value = current + itemId
-                }
-            } else {
-                _selectedItemId.value = itemId
-            }
-        }
-    }
-
-    fun deleteSelectedItems() {
-        val idsToDelete = _selectedItemIds.value
-        if (idsToDelete.isEmpty()) return
-        saveCurrentStateToUndo()
-        viewModelScope.launch(Dispatchers.IO) {
-            val items = canvasItems.value.filter { it.id in idsToDelete }
-            items.forEach { item ->
-                repository.deleteCanvasItem(item)
-            }
-            _selectedItemIds.value = emptySet()
-        }
-    }
-
-    fun togglePinSelectedItems() {
-        val idsToPin = _selectedItemIds.value
-        if (idsToPin.isEmpty()) return
-        saveCurrentStateToUndo()
-        viewModelScope.launch(Dispatchers.IO) {
-            val items = canvasItems.value.filter { it.id in idsToPin }
-            val anyUnpinned = items.any { !it.isPinned }
-            items.forEach { item ->
-                val updated = item.copy(isPinned = anyUnpinned)
-                repository.updateCanvasItem(updated)
-            }
-        }
-    }
-
-    fun toggleValuesSelectedItems() {
-        val idsToToggle = _selectedItemIds.value
-        if (idsToToggle.isEmpty()) return
-        saveCurrentStateToUndo()
-        viewModelScope.launch(Dispatchers.IO) {
-            val items = canvasItems.value.filter { it.id in idsToToggle }
-            val anyDisabled = items.any { !it.isValuesEnabled }
-            items.forEach { item ->
-                val updated = item.copy(isValuesEnabled = anyDisabled)
-                repository.updateCanvasItem(updated)
-            }
-        }
-    }
 
     fun autoArrangeGrid(layoutType: String = "GRID", density: Float = 2.75f) {
         val boardId = _currentBoardId.value ?: return
@@ -1363,8 +1054,8 @@ class DroidCanvasViewModel(
             repository.deleteCanvasItem(item)
             // 2. Comment out physical file deletion to allow full restoration via Undo
             // ImageStorageHelper.deleteImageFiles(item.fullPath, item.thumbPath)
-            if (_selectedItemId.value == item.id) {
-                _selectedItemId.value = null
+            if (selectedItemId.value == item.id) {
+                clearSelection()
             }
         }
     }
@@ -1426,56 +1117,7 @@ class DroidCanvasViewModel(
         canvasTranslateY = viewportCenterY - contentCenterY * newScale
     }
 
-    private var centerJob: Job? = null
 
-    fun cancelCentering() {
-        centerJob?.cancel()
-        centerJob = null
-    }
-
-    fun centerOnItem(item: CanvasItem, viewportWidth: Float, viewportHeight: Float, density: Float) {
-        val itemWidthPx = item.width * item.scale
-        val itemHeightPx = item.height * item.scale
-        
-        val itemCenterX = item.posX + itemWidthPx / 2f
-        val itemCenterY = item.posY + itemHeightPx / 2f
-        
-        val viewportCenterX = viewportWidth / 2f
-        val viewportCenterY = viewportHeight / 2f
-        
-        val targetTranslateX = viewportCenterX - itemCenterX * canvasScale
-        val targetTranslateY = viewportCenterY - itemCenterY * canvasScale
-        
-        selectItem(item.id)
-
-        centerJob?.cancel()
-        centerJob = viewModelScope.launch(Dispatchers.Main) {
-            isCenteringAnimated = true
-            try {
-                val startX = canvasTranslateX
-                val startY = canvasTranslateY
-                val durationMs = 350f
-                val startTime = System.currentTimeMillis()
-                while (true) {
-                    val elapsed = System.currentTimeMillis() - startTime
-                    if (elapsed >= durationMs) {
-                        canvasTranslateX = targetTranslateX
-                        canvasTranslateY = targetTranslateY
-                        break
-                    }
-                    val fraction = elapsed / durationMs
-                    // Cubic ease-out interpolation
-                    val t = 1f - fraction
-                    val easeOut = 1f - t * t * t
-                    canvasTranslateX = startX + (targetTranslateX - startX) * easeOut
-                    canvasTranslateY = startY + (targetTranslateY - startY) * easeOut
-                    delay(16)
-                }
-            } finally {
-                isCenteringAnimated = false
-            }
-        }
-    }
 
     fun handleCanvasTap(tapX: Float, tapY: Float, density: Float) {
         if (isLocked) return
@@ -1498,7 +1140,7 @@ class DroidCanvasViewModel(
             return
         }
         
-        val currentSelectedId = _selectedItemId.value
+        val currentSelectedId = selectedItemId.value
         val currentIndex = overlappingItems.indexOfFirst { it.id == currentSelectedId }
         
         if (currentIndex != -1 && overlappingItems.size > 1) {
