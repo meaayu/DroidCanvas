@@ -20,6 +20,8 @@ import coil.Coil
 import coil.ImageLoader
 import coil.decode.GifDecoder
 import coil.decode.ImageDecoderDecoder
+import coil.disk.DiskCache
+import coil.memory.MemoryCache
 import com.example.data.DroidCanvasDatabase
 import com.example.data.DroidCanvasRepository
 import com.example.ui.DroidCanvasScreen
@@ -35,7 +37,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Configure Coil to support animated GIFs
+        // Configure Coil with optimizations:
+        // 1. memory cache (25%)
+        // 2. disk cache (2%)
+        // 3. GIF support
         val imageLoader = ImageLoader.Builder(applicationContext)
             .components {
                 if (Build.VERSION.SDK_INT >= 28) {
@@ -43,6 +48,17 @@ class MainActivity : ComponentActivity() {
                 } else {
                     add(GifDecoder.Factory())
                 }
+            }
+            .memoryCache {
+                MemoryCache.Builder(applicationContext)
+                    .maxSizePercent(0.25)
+                    .build()
+            }
+            .diskCache {
+                DiskCache.Builder()
+                    .directory(applicationContext.cacheDir.resolve("image_cache"))
+                    .maxSizePercent(0.02)
+                    .build()
             }
             .build()
         Coil.setImageLoader(imageLoader)
