@@ -98,8 +98,10 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Contrast
+import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.FilterBAndW
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.Image
@@ -255,6 +257,7 @@ fun DroidCanvasScreen(
     var showManageBoardsDialog by remember { mutableStateOf(false) }
     var renamingBoard by remember { mutableStateOf<Board?>(null) }
     var renamingBoardName by remember { mutableStateOf("") }
+    var cropTargetItem by remember { mutableStateOf<CanvasItem?>(null) }
 
     var showEmptyState by remember { mutableStateOf(false) }
     LaunchedEffect(isLoaded, canvasItems, boards) {
@@ -336,7 +339,9 @@ fun DroidCanvasScreen(
                             },
                             onManageBoardsClick = { showManageBoardsDialog = true },
                             onSettingsClick = { showSettingsDialog = true },
-                            modifier = Modifier.fillMaxSize()
+                            onClearBoardClick = { showClearConfirmDialog = true },
+                            modifier = Modifier.fillMaxSize(),
+                            onCropItemClick = { cropTargetItem = it }
                         )
                     }
                 }
@@ -376,9 +381,11 @@ fun DroidCanvasScreen(
                                     },
                                     onManageBoardsClick = { showManageBoardsDialog = true },
                                     onSettingsClick = { showSettingsDialog = true },
+                                    onClearBoardClick = { showClearConfirmDialog = true },
                                     modifier = Modifier
                                         .width(300.dp)
-                                        .fillMaxHeight()
+                                        .fillMaxHeight(),
+                                    onCropItemClick = { cropTargetItem = it }
                                 )
 
                                 Box(
@@ -2283,42 +2290,42 @@ fun DroidCanvasScreen(
 
 
                         // SECTION 1: THEME & VISUAL STYLE
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.padding(horizontal = 4.dp)
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.padding(horizontal = 6.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Landscape,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(22.dp)
                                 )
                                 Text(
                                     text = "THEME & VISUAL STYLE",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary,
-                                    letterSpacing = 1.sp
+                                    letterSpacing = 1.2.sp
                                 )
                             }
                             Card(
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceContainer
                                 ),
-                                shape = RoundedCornerShape(16.dp),
+                                shape = RoundedCornerShape(20.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(
-                                    modifier = Modifier.padding(16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                    modifier = Modifier.padding(18.dp),
+                                    verticalArrangement = Arrangement.spacedBy(20.dp)
                                 ) {
                                     // 1. Application Theme
-                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                         Text(
                                             text = "Application Theme",
-                                            style = MaterialTheme.typography.labelMedium,
+                                            style = MaterialTheme.typography.labelLarge,
                                             fontWeight = FontWeight.SemiBold,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
@@ -2328,8 +2335,14 @@ fun DroidCanvasScreen(
                                             "light" to "Light"
                                         )
                                         Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(
+                                                    MaterialTheme.colorScheme.surfaceContainerHigh,
+                                                    shape = RoundedCornerShape(12.dp)
+                                                )
+                                                .padding(4.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
                                             themeModes.forEach { (mode, label) ->
                                                 val isSelected = viewModel.themeMode == mode
@@ -2341,10 +2354,10 @@ fun DroidCanvasScreen(
                                                 Box(
                                                     modifier = Modifier
                                                         .weight(1f)
-                                                        .clip(RoundedCornerShape(10.dp))
+                                                        .clip(RoundedCornerShape(8.dp))
                                                         .background(
-                                                            if (isSelected) MaterialTheme.colorScheme.primary
-                                                            else MaterialTheme.colorScheme.surfaceContainerHigh
+                                                            if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                                                            else Color.Transparent
                                                         )
                                                         .clickable { viewModel.themeMode = mode }
                                                         .padding(vertical = 10.dp),
@@ -2357,12 +2370,12 @@ fun DroidCanvasScreen(
                                                         Icon(
                                                             imageVector = icon,
                                                             contentDescription = label,
-                                                            tint = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                            tint = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
                                                             modifier = Modifier.size(16.dp)
                                                         )
                                                         Text(
                                                             text = label,
-                                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
                                                             style = MaterialTheme.typography.bodyMedium,
                                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -2387,17 +2400,40 @@ fun DroidCanvasScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = "Material You Dynamic Color",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Text(
-                                                text = "Enable dynamic theme colors extracted from system wallpaper",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                            )
+                                        Row(
+                                            modifier = Modifier.weight(1f),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(40.dp)
+                                                    .background(
+                                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                                        CircleShape
+                                                    ),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Brush,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                            Column {
+                                                Text(
+                                                    text = "Material You Dynamic Color",
+                                                    style = MaterialTheme.typography.bodyLarge,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Text(
+                                                    text = "Extract color palette from your system wallpaper",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                                )
+                                            }
                                         }
                                         Switch(
                                             checked = viewModel.isDynamicColorEnabled,
@@ -2418,75 +2454,45 @@ fun DroidCanvasScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = "Pitch Black (AMOLED)",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Text(
-                                                text = "Use pure black background in dark mode to save power",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                            )
+                                        Row(
+                                            modifier = Modifier.weight(1f),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(40.dp)
+                                                    .background(
+                                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                                        CircleShape
+                                                    ),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Contrast,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                            Column {
+                                                Text(
+                                                    text = "Pitch Black (AMOLED)",
+                                                    style = MaterialTheme.typography.bodyLarge,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Text(
+                                                    text = "Pure black workspace in dark mode to save battery",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                                )
+                                            }
                                         }
                                         Switch(
                                             checked = viewModel.isPitchBlackEnabled,
                                             onCheckedChange = { viewModel.isPitchBlackEnabled = it }
                                         )
-                                    }
-
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(0.5.dp)
-                                            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                                    )
-
-                                    // 2. Grid Style Selection
-                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Text(
-                                            text = "Canvas Background Grid Pattern",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        val styles = listOf(
-                                            "dots" to "Dots",
-                                            "lines" to "Lines",
-                                            "graph" to "Graph",
-                                            "none" to "None"
-                                        )
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .horizontalScroll(rememberScrollState()),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            styles.forEach { (styleKey, label) ->
-                                                val isSelected = viewModel.gridStyle == styleKey
-                                                Box(
-                                                    modifier = Modifier
-                                                        .clip(RoundedCornerShape(10.dp))
-                                                        .background(
-                                                            if (isSelected) MaterialTheme.colorScheme.primary
-                                                            else MaterialTheme.colorScheme.surfaceContainerHigh
-                                                        )
-                                                        .clickable { viewModel.gridStyle = styleKey }
-                                                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Text(
-                                                        text = label,
-                                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                                        style = MaterialTheme.typography.bodyMedium,
-                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                                        maxLines = 1
-                                                    )
-                                                }
-                                            }
-                                        }
                                     }
                                 }
                             }
@@ -2494,60 +2500,82 @@ fun DroidCanvasScreen(
 
 
                         // SECTION 2: CANVAS NAVIGATION & TACTILITY
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.padding(horizontal = 4.dp)
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.padding(horizontal = 6.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Layers,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(22.dp)
                                 )
                                 Text(
-                                    text = "CANVAS NAVIGATION & TACTILITY",
+                                    text = "CANVAS NAVIGATION & FEEL",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary,
-                                    letterSpacing = 1.sp
+                                    letterSpacing = 1.2.sp
                                 )
                             }
                             Card(
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceContainer
                                 ),
-                                shape = RoundedCornerShape(16.dp),
+                                shape = RoundedCornerShape(20.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(
-                                    modifier = Modifier.padding(16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                    modifier = Modifier.padding(18.dp),
+                                    verticalArrangement = Arrangement.spacedBy(20.dp)
                                 ) {
                                     // 1. Double Tap Zoom Level
-                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceBetween,
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(
-                                                    text = "Double-Tap Zoom Target",
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.onSurface
-                                                )
-                                                Text(
-                                                    text = "Target zoom level when double-tapping the canvas",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                                )
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(40.dp)
+                                                        .background(
+                                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                                            CircleShape
+                                                        ),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.ZoomIn,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                                Column {
+                                                    Text(
+                                                        text = "Double-Tap Zoom Target",
+                                                        style = MaterialTheme.typography.bodyLarge,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                    Text(
+                                                        text = "Target scale multiplier on fast double-taps",
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                                    )
+                                                }
                                             }
                                             Text(
                                                 text = "${(viewModel.doubleTapZoomTarget * 100).toInt()}% (${"%.1fx".format(viewModel.doubleTapZoomTarget)})",
-                                                style = MaterialTheme.typography.labelLarge,
+                                                style = MaterialTheme.typography.bodyLarge,
                                                 fontWeight = FontWeight.Bold,
                                                 color = MaterialTheme.colorScheme.primary,
                                                 modifier = Modifier.padding(start = 8.dp)
@@ -2576,17 +2604,40 @@ fun DroidCanvasScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = "Tactile Haptic Feedback",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Text(
-                                                text = "Vibrate subtly on tap, zoom, or snap actions",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                            )
+                                        Row(
+                                            modifier = Modifier.weight(1f),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(40.dp)
+                                                    .background(
+                                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                                        CircleShape
+                                                    ),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Refresh,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                            Column {
+                                                Text(
+                                                    text = "Tactile Haptic Feedback",
+                                                    style = MaterialTheme.typography.bodyLarge,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Text(
+                                                    text = "Subtle vibration feedback on tap, draw, and zoom",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                                )
+                                            }
                                         }
                                         Switch(
                                             checked = viewModel.isHapticEnabled,
@@ -2598,258 +2649,36 @@ fun DroidCanvasScreen(
                         }
 
 
-                        // SECTION 3: GRID & ALIGNMENT SNAPPING
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        // SECTION 3: ABOUT DROIDCANVAS
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.padding(horizontal = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.GridView,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Text(
-                                    text = "GRID & ALIGNMENT SNAPPING",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    letterSpacing = 1.sp
-                                )
-                            }
-                            Card(
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainer
-                                ),
-                                shape = RoundedCornerShape(16.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                                ) {
-                                    // 1. Snap To Grid Switch
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = "Snap to Grid",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Text(
-                                                text = "Align reference boundaries dynamically to grid coordinates",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                            )
-                                        }
-                                        Switch(
-                                            checked = viewModel.isSnapToGrid,
-                                            onCheckedChange = { viewModel.isSnapToGrid = it }
-                                        )
-                                    }
-
-                                    if (viewModel.isSnapToGrid) {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(0.5.dp)
-                                                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                                        )
-
-                                        // 2. Snap Step Size Selector
-                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            Text(
-                                                text = "Grid Snap Step Size",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                            val snapSizes = listOf(20f to "20px", 40f to "40px", 80f to "80px", 120f to "120px")
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                            ) {
-                                                snapSizes.forEach { (size, label) ->
-                                                    val isSelected = viewModel.snapStepSize == size
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .weight(1f)
-                                                            .clip(RoundedCornerShape(10.dp))
-                                                            .background(
-                                                                if (isSelected) MaterialTheme.colorScheme.primary
-                                                                else MaterialTheme.colorScheme.surfaceContainerHigh
-                                                            )
-                                                            .clickable { viewModel.snapStepSize = size }
-                                                            .padding(vertical = 10.dp),
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        Text(
-                                                            text = label,
-                                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                                            style = MaterialTheme.typography.bodyMedium,
-                                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(0.5.dp)
-                                            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                                    )
-
-                                    // 3. Auto Arrange Gap
-                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Text(
-                                            text = "Auto-Arrange Spacing Gap",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        val spacingOptions = listOf(20f to "Tight", 40f to "Medium", 60f to "Standard", 100f to "Loose")
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            spacingOptions.forEach { (space, label) ->
-                                                val isSelected = viewModel.arrangeSpacing == space
-                                                Box(
-                                                    modifier = Modifier
-                                                        .weight(1f)
-                                                        .clip(RoundedCornerShape(10.dp))
-                                                        .background(
-                                                            if (isSelected) MaterialTheme.colorScheme.secondary
-                                                            else MaterialTheme.colorScheme.surfaceContainerHigh
-                                                        )
-                                                        .clickable { viewModel.arrangeSpacing = space }
-                                                        .padding(vertical = 10.dp),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Text(
-                                                        text = label,
-                                                        color = if (isSelected) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onSurface,
-                                                        style = MaterialTheme.typography.bodyMedium,
-                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                                        maxLines = 1
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-
-                        // SECTION 4: STORAGE & BOARD MAINTENANCE
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.padding(horizontal = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Text(
-                                    text = "STORAGE & MAINTENANCE",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.error,
-                                    letterSpacing = 1.sp
-                                )
-                            }
-                            Card(
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.15f)
-                                ),
-                                shape = RoundedCornerShape(16.dp),
-                                border = androidx.compose.foundation.BorderStroke(
-                                    1.dp,
-                                    MaterialTheme.colorScheme.error.copy(alpha = 0.25f)
-                                ),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = "Clear Current Board",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.error
-                                        )
-                                        Text(
-                                            text = "Wipe and permanently delete all loaded reference images on the active canvas",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(16.dp))
-                                    Button(
-                                        onClick = { showClearConfirmDialog = true },
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.error,
-                                            contentColor = MaterialTheme.colorScheme.onError
-                                        ),
-                                        shape = RoundedCornerShape(10.dp)
-                                    ) {
-                                        Text("Clear Board", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            }
-                        }
-
-
-                        // SECTION 5: ABOUT & SYSTEM UPDATE
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.padding(horizontal = 4.dp)
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.padding(horizontal = 6.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Info,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(22.dp)
                                 )
                                 Text(
                                     text = "ABOUT DROIDCANVAS",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary,
-                                    letterSpacing = 1.sp
+                                    letterSpacing = 1.2.sp
                                 )
                             }
                             Card(
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceContainer
                                 ),
-                                shape = RoundedCornerShape(16.dp),
+                                shape = RoundedCornerShape(20.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(
-                                    modifier = Modifier.padding(16.dp),
+                                    modifier = Modifier.padding(18.dp),
                                     verticalArrangement = Arrangement.spacedBy(16.dp)
                                 ) {
                                     Row(
@@ -2860,30 +2689,36 @@ fun DroidCanvasScreen(
                                         Column {
                                             Text(
                                                 text = "Application Version",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.Bold
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface
                                             )
                                             Text(
                                                 text = "Infinite Offline Reference Workspace",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                                             )
                                         }
                                         Text(
                                             text = "v${BuildConfig.VERSION_NAME}",
-                                            style = MaterialTheme.typography.bodyMedium,
+                                            style = MaterialTheme.typography.bodyLarge,
                                             fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            color = MaterialTheme.colorScheme.primary
                                         )
                                     }
 
-
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(0.5.dp)
+                                            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                                    )
 
                                     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clip(RoundedCornerShape(8.dp))
+                                            .clip(RoundedCornerShape(12.dp))
                                             .clickable {
                                                 try {
                                                     uriHandler.openUri("https://github.com/meaayu")
@@ -2898,35 +2733,38 @@ fun DroidCanvasScreen(
                                         Column {
                                             Text(
                                                 text = "Developer",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.Medium
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface
                                             )
                                             Text(
-                                                text = "Tap to view profile",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                                                text = "Tap to view GitHub profile",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
                                             )
                                         }
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
                                             Text(
                                                 text = "aayu",
-                                                style = MaterialTheme.typography.bodyMedium,
+                                                style = MaterialTheme.typography.bodyLarge,
                                                 fontWeight = FontWeight.Bold,
                                                 color = MaterialTheme.colorScheme.primary
                                             )
-                                            Spacer(modifier = Modifier.width(4.dp))
                                             Icon(
                                                 imageVector = Icons.Default.Info,
                                                 contentDescription = "Link",
-                                                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                                                modifier = Modifier.size(14.dp)
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(16.dp)
                                             )
                                         }
                                     }
                                 }
                             }
                         }
-                        
+
                         Spacer(modifier = Modifier.height(80.dp))
                     }
                 }
@@ -2936,6 +2774,14 @@ fun DroidCanvasScreen(
 
 
 
+
+    cropTargetItem?.let { item ->
+        CropImageDialog(
+            item = item,
+            viewModel = viewModel,
+            onDismiss = { cropTargetItem = null }
+        )
+    }
 
     // 8. CLEAR BOARD CONFIRMATION DIALOG
     if (showClearConfirmDialog) {
@@ -3067,19 +2913,8 @@ fun CanvasItemView(
     val nativeWidthDp = remember(item.width) { with(density) { item.width.toDp() } }
     val nativeHeightDp = remember(item.height) { with(density) { item.height.toDp() } }
 
-    // Prevent images from starting too massive or tiny
-    val maxBound = 320.dp
-    val scaleFactor = remember(nativeWidthDp, nativeHeightDp) {
-        val maxDimension = maxOf(nativeWidthDp, nativeHeightDp)
-        if (maxDimension > maxBound) {
-            maxBound.value / maxDimension.value
-        } else {
-            1f
-        }
-    }
-
-    val displayWidth = nativeWidthDp * scaleFactor
-    val displayHeight = nativeHeightDp * scaleFactor
+    val displayWidth = nativeWidthDp
+    val displayHeight = nativeHeightDp
 
     val displayWidthPx = remember(displayWidth, density) { with(density) { displayWidth.toPx() } }
     val displayHeightPx = remember(displayHeight, density) { with(density) { displayHeight.toPx() } }
@@ -3885,6 +3720,15 @@ fun SidebarSectionHeader(
     onToggle: () -> Unit,
     action: (@Composable () -> Unit)? = null
 ) {
+    val rotationState by animateFloatAsState(
+        targetValue = if (isExpanded) 0f else -90f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "section_header_rotation"
+    )
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -3902,7 +3746,7 @@ fun SidebarSectionHeader(
                 contentDescription = if (isExpanded) "Collapse" else "Expand",
                 modifier = Modifier
                     .size(18.dp)
-                    .rotate(if (isExpanded) 0f else -90f),
+                    .rotate(rotationState),
                 tint = MaterialTheme.colorScheme.primary
             )
             Text(
@@ -3943,7 +3787,9 @@ fun SidebarContent(
     onRenameBoardClick: (Board) -> Unit,
     onManageBoardsClick: () -> Unit,
     onSettingsClick: () -> Unit,
-    modifier: Modifier = Modifier
+    onClearBoardClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    onCropItemClick: (CanvasItem) -> Unit = {}
 ) {
     val boards by viewModel.boards.collectAsState()
     val visibleBoards = boards
@@ -3961,7 +3807,6 @@ fun SidebarContent(
     
     // Collapsible states
     var isWorkspacesExpanded by remember { mutableStateOf(true) }
-    var isInspectorExpanded by remember { mutableStateOf(true) }
     var isViewportExpanded by remember { mutableStateOf(true) }
     var isLayersExpanded by remember { mutableStateOf(true) }
     var isDrawingExpanded by remember { mutableStateOf(true) }
@@ -4097,8 +3942,12 @@ fun SidebarContent(
             ) { tab ->
                 when (tab) {
                 SidebarTab.BOARD -> {
-                    // Section 2: Workspace Boards (Quick Selection List)
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(20.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        // Section 2: Workspace Boards (Quick Selection List)
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         SidebarSectionHeader(
                             title = "WORKSPACES",
                             isExpanded = isWorkspacesExpanded,
@@ -4456,6 +4305,72 @@ fun SidebarContent(
                             }
                         }
                     }
+
+                    // Divider
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
+                    )
+
+                    // Section: Storage & Maintenance (Clear Board)
+                    var isMaintenanceExpanded by remember { mutableStateOf(false) }
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SidebarSectionHeader(
+                            title = "MAINTENANCE",
+                            isExpanded = isMaintenanceExpanded,
+                            onToggle = { isMaintenanceExpanded = !isMaintenanceExpanded }
+                        )
+
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = isMaintenanceExpanded,
+                            enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+                            exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
+                        ) {
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.15f)
+                                ),
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.error.copy(alpha = 0.25f)
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = "Wipe and permanently delete all loaded reference images on the active canvas.",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                    )
+                                    Button(
+                                        onClick = onClearBoardClick,
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.error,
+                                            contentColor = MaterialTheme.colorScheme.onError
+                                        ),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.fillMaxWidth(),
+                                        contentPadding = PaddingValues(vertical = 8.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Clear Current Board", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    }
                 }
 
                 SidebarTab.DRAW -> {
@@ -4771,468 +4686,11 @@ fun SidebarContent(
                 }
 
                 SidebarTab.LAYERS -> {
-                    // Section 4: Selected Image Inspector (Desktop-grade control center on Tablet!)
-                    val selectedItem = canvasItems.find { it.id == selectedItemId }
-                    if (selectedItem != null) {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            SidebarSectionHeader(
-                                title = "ELEMENT INSPECTOR",
-                                isExpanded = isInspectorExpanded,
-                                onToggle = { isInspectorExpanded = !isInspectorExpanded }
-                            )
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(20.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
 
-                            androidx.compose.animation.AnimatedVisibility(
-                                visible = isInspectorExpanded,
-                                enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
-                                exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
-                            ) {
-                                Card(
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
-                                    ),
-                                    border = BorderStroke(
-                                        1.5.dp,
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                                    ),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(12.dp),
-                                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                                    ) {
-                                        val itemIndex = canvasItems.indexOf(selectedItem)
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                            ) {
-                                                // Element thumbnail inside inspector header
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(24.dp)
-                                                        .clip(RoundedCornerShape(4.dp))
-                                                        .background(MaterialTheme.colorScheme.surfaceContainer),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    AsyncImage(
-                                                        model = ImageRequest.Builder(LocalContext.current)
-                                                            .data(selectedItem.thumbPath)
-                                                            .crossfade(true)
-                                                            .build(),
-                                                        contentDescription = "Selected layer thumbnail",
-                                                        contentScale = ContentScale.Crop,
-                                                        modifier = Modifier.fillMaxSize()
-                                                    )
-                                                }
-                                                Text(
-                                                    text = "Image #${itemIndex + 1}",
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.onSurface
-                                                )
-                                            }
-                                            
-                                            IconButton(
-                                                onClick = { viewModel.selectItem(null) },
-                                                modifier = Modifier.size(24.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Close,
-                                                    contentDescription = "Deselect",
-                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.size(14.dp)
-                                                )
-                                            }
-                                        }
-
-                                        // 1. Fine Positioning Nudges
-                                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween
-                                            ) {
-                                                Text(
-                                                    text = "Position (Canvas Space)",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                                Text(
-                                                    text = "X: ${selectedItem.posX.roundToInt()}  Y: ${selectedItem.posY.roundToInt()}",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                            ) {
-                                                // Left Button
-                                                OutlinedButton(
-                                                    onClick = { viewModel.updateItemPosition(selectedItem, -10f, 0f) },
-                                                    contentPadding = PaddingValues(0.dp),
-                                                    modifier = Modifier.weight(1f).height(32.dp),
-                                                    shape = RoundedCornerShape(8.dp),
-                                                    colors = ButtonDefaults.outlinedButtonColors(
-                                                        contentColor = MaterialTheme.colorScheme.primary
-                                                    ),
-                                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.ArrowBack,
-                                                        contentDescription = "Move Left",
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                }
-
-                                                // Right Button
-                                                OutlinedButton(
-                                                    onClick = { viewModel.updateItemPosition(selectedItem, 10f, 0f) },
-                                                    contentPadding = PaddingValues(0.dp),
-                                                    modifier = Modifier.weight(1f).height(32.dp),
-                                                    shape = RoundedCornerShape(8.dp),
-                                                    colors = ButtonDefaults.outlinedButtonColors(
-                                                        contentColor = MaterialTheme.colorScheme.primary
-                                                    ),
-                                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.ArrowForward,
-                                                        contentDescription = "Move Right",
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                }
-
-                                                // Up Button
-                                                OutlinedButton(
-                                                    onClick = { viewModel.updateItemPosition(selectedItem, 0f, -10f) },
-                                                    contentPadding = PaddingValues(0.dp),
-                                                    modifier = Modifier.weight(1f).height(32.dp),
-                                                    shape = RoundedCornerShape(8.dp),
-                                                    colors = ButtonDefaults.outlinedButtonColors(
-                                                        contentColor = MaterialTheme.colorScheme.primary
-                                                    ),
-                                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.ArrowUpward,
-                                                        contentDescription = "Move Up",
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                }
-
-                                                // Down Button
-                                                OutlinedButton(
-                                                    onClick = { viewModel.updateItemPosition(selectedItem, 0f, 10f) },
-                                                    contentPadding = PaddingValues(0.dp),
-                                                    modifier = Modifier.weight(1f).height(32.dp),
-                                                    shape = RoundedCornerShape(8.dp),
-                                                    colors = ButtonDefaults.outlinedButtonColors(
-                                                        contentColor = MaterialTheme.colorScheme.primary
-                                                    ),
-                                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.ArrowDownward,
-                                                        contentDescription = "Move Down",
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                }
-                                            }
-                                        }
-
-                                        // 2. Scale Control
-                                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text(
-                                                    text = "Scale Factor",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                                ) {
-                                                    Text(
-                                                        text = "${(selectedItem.scale * 100).roundToInt()}%",
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = MaterialTheme.colorScheme.primary
-                                                    )
-                                                    IconButton(
-                                                        onClick = { viewModel.updateItemAbsoluteScale(selectedItem, 1f) },
-                                                        modifier = Modifier.size(16.dp)
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Icons.Default.Refresh,
-                                                            contentDescription = "Reset Scale",
-                                                            modifier = Modifier.size(10.dp)
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                            Slider(
-                                                value = selectedItem.scale,
-                                                onValueChange = { viewModel.updateItemAbsoluteScale(selectedItem, it) },
-                                                valueRange = 0.05f..3.0f,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                        }
-
-                                        // 3. Rotation Control
-                                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text(
-                                                    text = "Rotation Angle",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                                ) {
-                                                    Text(
-                                                        text = "${selectedItem.rotation.roundToInt()}°",
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = MaterialTheme.colorScheme.primary
-                                                    )
-                                                    IconButton(
-                                                        onClick = { viewModel.updateItemAbsoluteRotation(selectedItem, 0f) },
-                                                        modifier = Modifier.size(16.dp)
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Icons.Default.Refresh,
-                                                            contentDescription = "Reset Rotation",
-                                                            modifier = Modifier.size(10.dp)
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                            Slider(
-                                                value = selectedItem.rotation,
-                                                onValueChange = { viewModel.updateItemAbsoluteRotation(selectedItem, it) },
-                                                valueRange = 0f..360f,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                            ) {
-                                                listOf(0f, 90f, 180f, 270f).forEach { angle ->
-                                                    val isSelected = selectedItem.rotation.roundToInt() == angle.roundToInt()
-                                                    AssistChip(
-                                                        onClick = { viewModel.updateItemAbsoluteRotation(selectedItem, angle) },
-                                                        label = { Text("${angle.roundToInt()}°", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
-                                                        colors = AssistChipDefaults.assistChipColors(
-                                                            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                                                            labelColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                                                        )
-                                                    )
-                                                }
-                                            }
-                                        }
-
-                                        // 4. Image Filters & Locks (Grayscale, Flips, Pins)
-                                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                            Text(
-                                                text = "Transforms & Filters",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                // Values Study Toggle
-                                                val isValuesEnabled = selectedItem.isValuesEnabled
-                                                IconButton(
-                                                    onClick = { viewModel.toggleValuesEnabled(selectedItem) },
-                                                    modifier = Modifier.size(36.dp),
-                                                    colors = IconButtonDefaults.iconButtonColors(
-                                                        containerColor = if (isValuesEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer,
-                                                        contentColor = if (isValuesEnabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                                                    )
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Contrast,
-                                                        contentDescription = "Values Study Mode",
-                                                        modifier = Modifier.size(18.dp)
-                                                    )
-                                                }
-
-                                                // Flip Horizontal
-                                                val isFlippedH = selectedItem.flipHorizontal
-                                                IconButton(
-                                                    onClick = { viewModel.toggleFlipHorizontal(selectedItem) },
-                                                    modifier = Modifier.size(36.dp),
-                                                    colors = IconButtonDefaults.iconButtonColors(
-                                                        containerColor = if (isFlippedH) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer,
-                                                        contentColor = if (isFlippedH) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                                                    )
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Flip,
-                                                        contentDescription = "Flip Horizontal",
-                                                        modifier = Modifier.size(18.dp).rotate(90f)
-                                                    )
-                                                }
-
-                                                // Flip Vertical
-                                                val isFlippedV = selectedItem.flipVertical
-                                                IconButton(
-                                                    onClick = { viewModel.toggleFlipVertical(selectedItem) },
-                                                    modifier = Modifier.size(36.dp),
-                                                    colors = IconButtonDefaults.iconButtonColors(
-                                                        containerColor = if (isFlippedV) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer,
-                                                        contentColor = if (isFlippedV) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                                                    )
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Flip,
-                                                        contentDescription = "Flip Vertical",
-                                                        modifier = Modifier.size(18.dp)
-                                                    )
-                                                }
-
-                                                // Pin state
-                                                val isPinned = selectedItem.isPinned
-                                                IconButton(
-                                                    onClick = { viewModel.togglePinItem(selectedItem) },
-                                                    modifier = Modifier.size(36.dp),
-                                                    colors = IconButtonDefaults.iconButtonColors(
-                                                        containerColor = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer,
-                                                        contentColor = if (isPinned) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                                                    )
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.PushPin,
-                                                        contentDescription = "Pin Item",
-                                                        modifier = Modifier.size(18.dp)
-                                                    )
-                                                }
-                                            }
-                                        }
-
-                                        if (selectedItem.isValuesEnabled) {
-                                            ValuesStudyPanel(selectedItem, viewModel)
-                                        }
-
-                                        // 5. Layer Ordering Quick Actions
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            OutlinedButton(
-                                                onClick = { viewModel.bringToFront(selectedItem) },
-                                                contentPadding = PaddingValues(0.dp),
-                                                modifier = Modifier.weight(1f).height(32.dp),
-                                                shape = RoundedCornerShape(8.dp),
-                                                colors = ButtonDefaults.outlinedButtonColors(
-                                                    contentColor = MaterialTheme.colorScheme.primary
-                                                ),
-                                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f))
-                                            ) {
-                                                Icon(Icons.Default.FlipToFront, contentDescription = null, modifier = Modifier.size(14.dp))
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text("Front", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                            }
-
-                                            OutlinedButton(
-                                                onClick = { viewModel.sendToBack(selectedItem) },
-                                                contentPadding = PaddingValues(0.dp),
-                                                modifier = Modifier.weight(1f).height(32.dp),
-                                                shape = RoundedCornerShape(8.dp),
-                                                colors = ButtonDefaults.outlinedButtonColors(
-                                                    contentColor = MaterialTheme.colorScheme.primary
-                                                ),
-                                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f))
-                                            ) {
-                                                Icon(Icons.Default.Layers, contentDescription = null, modifier = Modifier.size(14.dp))
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text("Back", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                            }
-                                        }
-
-                                        // 6. Utility Actions (Center, Duplicate, Delete)
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            Button(
-                                                onClick = {
-                                                    viewModel.centerOnItem(selectedItem, viewportWidth, viewportHeight, density)
-                                                },
-                                                colors = ButtonDefaults.buttonColors(
-                                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                                ),
-                                                shape = RoundedCornerShape(8.dp),
-                                                modifier = Modifier.weight(1.5f).height(32.dp),
-                                                contentPadding = PaddingValues(0.dp)
-                                            ) {
-                                                Icon(Icons.Default.CenterFocusStrong, contentDescription = null, modifier = Modifier.size(14.dp))
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text("Center", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                            }
-
-                                            Button(
-                                                onClick = { viewModel.duplicateItem(selectedItem) },
-                                                colors = ButtonDefaults.buttonColors(
-                                                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                                    contentColor = MaterialTheme.colorScheme.onSurface
-                                                ),
-                                                shape = RoundedCornerShape(8.dp),
-                                                modifier = Modifier.weight(1f).height(32.dp),
-                                                contentPadding = PaddingValues(0.dp)
-                                            ) {
-                                                Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp))
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text("Copy", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                            }
-
-                                            Button(
-                                                onClick = { viewModel.deleteItem(selectedItem) },
-                                                colors = ButtonDefaults.buttonColors(
-                                                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                                                    contentColor = MaterialTheme.colorScheme.onErrorContainer
-                                                ),
-                                                shape = RoundedCornerShape(8.dp),
-                                                modifier = Modifier.weight(1f).height(32.dp),
-                                                contentPadding = PaddingValues(0.dp)
-                                            ) {
-                                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(14.dp))
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text("Delete", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Divider
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(1.dp)
-                                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
-                        )
-                    }
 
                     // Section 5: Reference Images (Layers list with Thumbnails!)
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -5261,8 +4719,22 @@ fun SidebarContent(
 
                         androidx.compose.animation.AnimatedVisibility(
                             visible = isLayersExpanded,
-                            enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
-                            exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
+                            enter = androidx.compose.animation.expandVertically(
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = Spring.StiffnessMediumLow
+                                )
+                            ) + androidx.compose.animation.fadeIn(
+                                animationSpec = tween(200)
+                            ),
+                            exit = androidx.compose.animation.shrinkVertically(
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = Spring.StiffnessMediumLow
+                                )
+                            ) + androidx.compose.animation.fadeOut(
+                                animationSpec = tween(150)
+                            )
                         ) {
                             if (canvasItems.isEmpty()) {
                                 Surface(
@@ -5286,26 +4758,63 @@ fun SidebarContent(
                                     val filteredItems = canvasItems.mapIndexed { index, item -> index to item }
 
                                     filteredItems.forEach { (index, item) ->
-                                            val isSelected = selectedItemId == item.id
-                                            Surface(
-                                                shape = RoundedCornerShape(12.dp),
-                                                color = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer,
-                                                border = BorderStroke(
-                                                    1.dp,
-                                                    if (isSelected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                                                ),
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clip(RoundedCornerShape(12.dp))
-                                                    .clickable {
-                                                        viewModel.selectItem(item.id)
-                                                        viewModel.centerOnItem(item, viewportWidth, viewportHeight, density)
-                                                    }
-                                            ) {
+                                        val isSelected = selectedItemId == item.id
+
+                                        // Buttery-smooth caret rotation
+                                        val caretRotation by animateFloatAsState(
+                                            targetValue = if (isSelected) 180f else 0f,
+                                            animationSpec = spring(
+                                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                stiffness = Spring.StiffnessLow
+                                            ),
+                                            label = "layer_caret_rotation_${item.id}"
+                                        )
+
+                                        // Smooth fluid background color transition
+                                        val targetBgColor = if (isSelected) {
+                                            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)
+                                        } else {
+                                            MaterialTheme.colorScheme.surfaceContainer
+                                        }
+                                        val animatedBgColor by animateColorAsState(
+                                            targetValue = targetBgColor,
+                                            animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
+                                            label = "layer_bg_${item.id}"
+                                        )
+
+                                        // Smooth fluid border color transition
+                                        val targetBorderColor = if (isSelected) {
+                                            MaterialTheme.colorScheme.secondary
+                                        } else {
+                                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                                        }
+                                        val animatedBorderColor by animateColorAsState(
+                                            targetValue = targetBorderColor,
+                                            animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
+                                            label = "layer_border_${item.id}"
+                                        )
+
+                                        Surface(
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = animatedBgColor,
+                                            border = BorderStroke(1.dp, animatedBorderColor),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                        ) {
+                                            Column(modifier = Modifier.fillMaxWidth()) {
+                                                // Header Row (Clickable)
                                                 Row(
                                                     modifier = Modifier
                                                         .fillMaxWidth()
-                                                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                                                        .clickable {
+                                                            if (isSelected) {
+                                                                viewModel.selectItem(null)
+                                                            } else {
+                                                                viewModel.selectItem(item.id)
+                                                                viewModel.centerOnItem(item, viewportWidth, viewportHeight, density)
+                                                            }
+                                                        }
+                                                        .padding(horizontal = 10.dp, vertical = 8.dp),
                                                     verticalAlignment = Alignment.CenterVertically,
                                                     horizontalArrangement = Arrangement.SpaceBetween
                                                 ) {
@@ -5358,7 +4867,7 @@ fun SidebarContent(
 
                                                     Row(
                                                         verticalAlignment = Alignment.CenterVertically,
-                                                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                                                     ) {
                                                         if (item.isPinned) {
                                                             Icon(
@@ -5376,17 +4885,488 @@ fun SidebarContent(
                                                                 modifier = Modifier.size(12.dp)
                                                             )
                                                         }
-                                                        // Delete Item icon for quick access
-                                                        IconButton(
-                                                            onClick = { viewModel.deleteItem(item) },
-                                                            modifier = Modifier.size(24.dp)
+                                                        
+                                                        // Down/up expand caret or general settings indicator
+                                                        Icon(
+                                                            imageVector = Icons.Default.KeyboardArrowDown,
+                                                            contentDescription = "Toggle Settings",
+                                                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                            modifier = Modifier.size(16.dp).rotate(caretRotation)
+                                                        )
+                                                    }
+                                                }
+
+                                                var selectedSubTab by remember(item.id) { mutableStateOf("adjust") }
+
+                                                                                                 // Expanded settings!
+                                                 androidx.compose.animation.AnimatedVisibility(
+                                                     visible = isSelected,
+                                                     enter = androidx.compose.animation.expandVertically(
+                                                         animationSpec = androidx.compose.animation.core.spring(
+                                                             dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                                                             stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                                                         )
+                                                     ) + androidx.compose.animation.fadeIn(
+                                                         animationSpec = androidx.compose.animation.core.spring(
+                                                             stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                                                         )
+                                                     ),
+                                                     exit = androidx.compose.animation.shrinkVertically(
+                                                         animationSpec = androidx.compose.animation.core.spring(
+                                                             dampingRatio = androidx.compose.animation.core.Spring.DampingRatioNoBouncy,
+                                                             stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                                                         )
+                                                     ) + androidx.compose.animation.fadeOut(
+                                                         animationSpec = androidx.compose.animation.core.spring(
+                                                             stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
+                                                         )
+                                                     )
+                                                 ) {
+                                                        Column(
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+                                                            verticalArrangement = Arrangement.spacedBy(10.dp)
                                                         ) {
-                                                            Icon(
-                                                                imageVector = Icons.Default.Delete,
-                                                                contentDescription = "Delete Image",
-                                                                tint = MaterialTheme.colorScheme.error,
-                                                                modifier = Modifier.size(14.dp)
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .fillMaxWidth()
+                                                                    .height(1.dp)
+                                                                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                                                             )
+
+                                                            // Sub-tab Segmented Controller
+                                                            Row(
+                                                                modifier = Modifier
+                                                                    .fillMaxWidth()
+                                                                    .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(12.dp))
+                                                                    .padding(4.dp),
+                                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                                            ) {
+                                                                listOf(
+                                                                    Triple("adjust", "Adjust", Icons.Default.Edit),
+                                                                    Triple("arrange", "Arrange", Icons.Default.Layers),
+                                                                    Triple("values", "Values", Icons.Default.Contrast)
+                                                                ).forEach { (tabId, label, icon) ->
+                                                                    val isActive = selectedSubTab == tabId
+                                                                    Box(
+                                                                        modifier = Modifier
+                                                                            .weight(1f)
+                                                                            .clip(RoundedCornerShape(10.dp))
+                                                                            .background(if (isActive) MaterialTheme.colorScheme.primary else Color.Transparent)
+                                                                            .clickable { selectedSubTab = tabId }
+                                                                            .padding(vertical = 8.dp),
+                                                                        contentAlignment = Alignment.Center
+                                                                    ) {
+                                                                        Row(
+                                                                            verticalAlignment = Alignment.CenterVertically,
+                                                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                                        ) {
+                                                                            Icon(
+                                                                                imageVector = icon,
+                                                                                contentDescription = null,
+                                                                                tint = if (isActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                                                modifier = Modifier.size(14.dp)
+                                                                            )
+                                                                            Text(
+                                                                                text = label,
+                                                                                style = MaterialTheme.typography.labelMedium,
+                                                                                fontWeight = FontWeight.Bold,
+                                                                                color = if (isActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                                                            )
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+
+                                                            Spacer(modifier = Modifier.height(2.dp))
+
+                                                            when (selectedSubTab) {
+                                                                "adjust" -> {
+                                                                    // Tab 1: Adjust controls (Scale, Rotation, Position D-pad)
+                                                                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+// 2. Rotation Card
+                                                                        Card(
+                                                                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                                                                            shape = RoundedCornerShape(12.dp),
+                                                                            modifier = Modifier.fillMaxWidth()
+                                                                        ) {
+                                                                            Column(
+                                                                                modifier = Modifier.padding(10.dp),
+                                                                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                                                                            ) {
+                                                                                var localRotation by remember(item.id) { mutableStateOf(item.rotation) }
+                                                                                LaunchedEffect(item.rotation) {
+                                                                                    localRotation = item.rotation
+                                                                                }
+                                                                                Row(
+                                                                                    modifier = Modifier.fillMaxWidth(),
+                                                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                                                    verticalAlignment = Alignment.CenterVertically
+                                                                                ) {
+                                                                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                                                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp).rotate(45f), tint = MaterialTheme.colorScheme.primary)
+                                                                                        Text("Rotation angle", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                                                                    }
+                                                                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                                                        Text(
+                                                                                            text = "${localRotation.roundToInt()}°",
+                                                                                            style = MaterialTheme.typography.labelMedium,
+                                                                                            fontWeight = FontWeight.Bold,
+                                                                                            color = MaterialTheme.colorScheme.primary
+                                                                                        )
+                                                                                        IconButton(
+                                                                                            onClick = {
+                                                                                                localRotation = 0f
+                                                                                                viewModel.commitItemRotation(item, 0f)
+                                                                                            },
+                                                                                            modifier = Modifier.size(20.dp)
+                                                                                        ) {
+                                                                                            Icon(
+                                                                                                imageVector = Icons.Default.Refresh,
+                                                                                                contentDescription = "Reset Rotation",
+                                                                                                modifier = Modifier.size(12.dp)
+                                                                                            )
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                                Row(
+                                                                                    modifier = Modifier.fillMaxWidth(),
+                                                                                    verticalAlignment = Alignment.CenterVertically
+                                                                                ) {
+                                                                                    TextButton(
+                                                                                        onClick = {
+                                                                                            val nextRot = (localRotation - 15f + 360f) % 360f
+                                                                                            localRotation = nextRot
+                                                                                            viewModel.commitItemRotation(item, nextRot)
+                                                                                        },
+                                                                                        contentPadding = PaddingValues(0.dp),
+                                                                                        modifier = Modifier.size(width = 36.dp, height = 24.dp)
+                                                                                    ) {
+                                                                                        Text("-15°", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                                                    }
+                                                                                    Slider(
+                                                                                        value = localRotation,
+                                                                                        onValueChange = {
+                                                                                            localRotation = it
+                                                                                            viewModel.updateItemRotationInMemory(item, it)
+                                                                                        },
+                                                                                        onValueChangeFinished = {
+                                                                                            viewModel.commitItemRotation(item, localRotation)
+                                                                                        },
+                                                                                        valueRange = 0f..360f,
+                                                                                        modifier = Modifier.weight(1f)
+                                                                                    )
+                                                                                    TextButton(
+                                                                                        onClick = {
+                                                                                            val nextRot = (localRotation + 15f) % 360f
+                                                                                            localRotation = nextRot
+                                                                                            viewModel.commitItemRotation(item, nextRot)
+                                                                                        },
+                                                                                        contentPadding = PaddingValues(0.dp),
+                                                                                        modifier = Modifier.size(width = 36.dp, height = 24.dp)
+                                                                                    ) {
+                                                                                        Text("+15°", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                                                    }
+                                                                                }
+                                                                                Row(
+                                                                                    modifier = Modifier.fillMaxWidth(),
+                                                                                    horizontalArrangement = Arrangement.SpaceBetween
+                                                                                ) {
+                                                                                    listOf(0f, 90f, 180f, 270f).forEach { angle ->
+                                                                                        val isSelectedChip = localRotation.roundToInt() == angle.roundToInt()
+                                                                                        AssistChip(
+                                                                                            onClick = {
+                                                                                                localRotation = angle
+                                                                                                viewModel.commitItemRotation(item, angle)
+                                                                                            },
+                                                                                            label = { Text("${angle.roundToInt()}°", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
+                                                                                            colors = AssistChipDefaults.assistChipColors(
+                                                                                                containerColor = if (isSelectedChip) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                                                                                labelColor = if (isSelectedChip) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                                                                            ),
+                                                                                            modifier = Modifier.height(26.dp)
+                                                                                        )
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                                "arrange" -> {
+                                                                    // Tab 2: Arrange Actions
+                                                                    Column(
+                                                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                                                        modifier = Modifier.fillMaxWidth()
+                                                                    ) {
+                                                                        // Subsection 1: Layer Ordering & Positioning
+                                                                        Text(
+                                                                            text = "Z-INDEX & DEPTH",
+                                                                            style = MaterialTheme.typography.labelSmall,
+                                                                            fontWeight = FontWeight.Bold,
+                                                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                                                        )
+
+                                                                        Row(
+                                                                            modifier = Modifier.fillMaxWidth(),
+                                                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                                        ) {
+                                                                            // Bring to Front
+                                                                            Button(
+                                                                                onClick = { viewModel.bringToFront(item) },
+                                                                                colors = ButtonDefaults.buttonColors(
+                                                                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                                                                    contentColor = MaterialTheme.colorScheme.onSurface
+                                                                                ),
+                                                                                shape = RoundedCornerShape(8.dp),
+                                                                                modifier = Modifier.weight(1f).height(36.dp),
+                                                                                contentPadding = PaddingValues(0.dp)
+                                                                            ) {
+                                                                                Icon(Icons.Default.FlipToFront, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                                                                                Spacer(modifier = Modifier.width(6.dp))
+                                                                                Text("Bring to Front", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                                            }
+
+                                                                            // Send to Back
+                                                                            Button(
+                                                                                onClick = { viewModel.sendToBack(item) },
+                                                                                colors = ButtonDefaults.buttonColors(
+                                                                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                                                                    contentColor = MaterialTheme.colorScheme.onSurface
+                                                                                ),
+                                                                                shape = RoundedCornerShape(8.dp),
+                                                                                modifier = Modifier.weight(1f).height(36.dp),
+                                                                                contentPadding = PaddingValues(0.dp)
+                                                                            ) {
+                                                                                Icon(Icons.Default.Layers, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                                                                                Spacer(modifier = Modifier.width(6.dp))
+                                                                                Text("Send to Back", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                                            }
+                                                                        }
+
+                                                                        // Subsection 2: Transformation & Pinning
+                                                                        Text(
+                                                                            text = "MODIFIERS & LOCKS",
+                                                                            style = MaterialTheme.typography.labelSmall,
+                                                                            fontWeight = FontWeight.Bold,
+                                                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                                                        )
+
+                                                                        Row(
+                                                                            modifier = Modifier.fillMaxWidth(),
+                                                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                                        ) {
+                                                                            // Pin/Lock state
+                                                                            val isPinned = item.isPinned
+                                                                            Button(
+                                                                                onClick = { viewModel.togglePinItem(item) },
+                                                                                colors = ButtonDefaults.buttonColors(
+                                                                                    containerColor = if (isPinned) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                                                                                    contentColor = if (isPinned) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                                                                ),
+                                                                                shape = RoundedCornerShape(8.dp),
+                                                                                modifier = Modifier.weight(1f).height(36.dp),
+                                                                                contentPadding = PaddingValues(0.dp)
+                                                                            ) {
+                                                                                Icon(
+                                                                                    Icons.Default.PushPin,
+                                                                                    contentDescription = null,
+                                                                                    modifier = Modifier.size(14.dp),
+                                                                                    tint = if (isPinned) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                                                                )
+                                                                                Spacer(modifier = Modifier.width(6.dp))
+                                                                                Text(if (isPinned) "Locked Pin" else "Pin on Board", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                                            }
+
+                                                                            // Crop Image
+                                                                            Button(
+                                                                                onClick = { onCropItemClick(item) },
+                                                                                colors = ButtonDefaults.buttonColors(
+                                                                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                                                                    contentColor = MaterialTheme.colorScheme.onSurface
+                                                                                ),
+                                                                                shape = RoundedCornerShape(8.dp),
+                                                                                modifier = Modifier.weight(1f).height(36.dp),
+                                                                                contentPadding = PaddingValues(0.dp)
+                                                                            ) {
+                                                                                Icon(Icons.Default.Crop, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.secondary)
+                                                                                Spacer(modifier = Modifier.width(6.dp))
+                                                                                Text("Crop Frame", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                                            }
+                                                                        }
+
+                                                                        Row(
+                                                                            modifier = Modifier.fillMaxWidth(),
+                                                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                                        ) {
+                                                                            // Flip Horizontal
+                                                                            val isFlippedH = item.flipHorizontal
+                                                                            Button(
+                                                                                onClick = { viewModel.toggleFlipHorizontal(item) },
+                                                                                colors = ButtonDefaults.buttonColors(
+                                                                                    containerColor = if (isFlippedH) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                                                                                    contentColor = if (isFlippedH) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
+                                                                                ),
+                                                                                shape = RoundedCornerShape(8.dp),
+                                                                                modifier = Modifier.weight(1f).height(36.dp),
+                                                                                contentPadding = PaddingValues(0.dp)
+                                                                            ) {
+                                                                                Icon(
+                                                                                    Icons.Default.Flip,
+                                                                                    contentDescription = null,
+                                                                                    modifier = Modifier.size(14.dp).rotate(90f),
+                                                                                    tint = if (isFlippedH) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant
+                                                                                )
+                                                                                Spacer(modifier = Modifier.width(6.dp))
+                                                                                Text("Flip Horiz", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                                            }
+
+                                                                            // Flip Vertical
+                                                                            val isFlippedV = item.flipVertical
+                                                                            Button(
+                                                                                onClick = { viewModel.toggleFlipVertical(item) },
+                                                                                colors = ButtonDefaults.buttonColors(
+                                                                                    containerColor = if (isFlippedV) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+                                                                                    contentColor = if (isFlippedV) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
+                                                                                ),
+                                                                                shape = RoundedCornerShape(8.dp),
+                                                                                modifier = Modifier.weight(1f).height(36.dp),
+                                                                                contentPadding = PaddingValues(0.dp)
+                                                                            ) {
+                                                                                Icon(
+                                                                                    Icons.Default.Flip,
+                                                                                    contentDescription = null,
+                                                                                    modifier = Modifier.size(14.dp),
+                                                                                    tint = if (isFlippedV) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant
+                                                                                )
+                                                                                Spacer(modifier = Modifier.width(6.dp))
+                                                                                Text("Flip Vert", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                                            }
+                                                                        }
+
+                                                                        // Subsection 3: Board Actions
+                                                                        Text(
+                                                                            text = "UTILITIES",
+                                                                            style = MaterialTheme.typography.labelSmall,
+                                                                            fontWeight = FontWeight.Bold,
+                                                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                                                        )
+
+                                                                        Row(
+                                                                            modifier = Modifier.fillMaxWidth(),
+                                                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                                        ) {
+                                                                            // Duplicate
+                                                                            Button(
+                                                                                onClick = { viewModel.duplicateItem(item) },
+                                                                                colors = ButtonDefaults.buttonColors(
+                                                                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                                                                    contentColor = MaterialTheme.colorScheme.onSurface
+                                                                                ),
+                                                                                shape = RoundedCornerShape(8.dp),
+                                                                                modifier = Modifier.weight(1.05f).height(36.dp),
+                                                                                contentPadding = PaddingValues(0.dp)
+                                                                            ) {
+                                                                                Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                                                Spacer(modifier = Modifier.width(6.dp))
+                                                                                Text("Clone Layer", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                                            }
+
+                                                                            // Delete Layer
+                                                                            Button(
+                                                                                onClick = { viewModel.deleteItem(item) },
+                                                                                colors = ButtonDefaults.buttonColors(
+                                                                                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f),
+                                                                                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                                                                ),
+                                                                                shape = RoundedCornerShape(8.dp),
+                                                                                modifier = Modifier.weight(0.95f).height(36.dp),
+                                                                                contentPadding = PaddingValues(0.dp)
+                                                                            ) {
+                                                                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.error)
+                                                                                Spacer(modifier = Modifier.width(6.dp))
+                                                                                Text("Delete", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                                "values" -> {
+                                                                    // Tab 3: Values Study Mode
+                                                                    Column(
+                                                                        modifier = Modifier.fillMaxWidth(),
+                                                                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                                                                    ) {
+                                                                        val isValuesEnabled = item.isValuesEnabled
+                                                                        
+                                                                        Card(
+                                                                            colors = CardDefaults.cardColors(
+                                                                                containerColor = if (isValuesEnabled) MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceContainerLow
+                                                                            ),
+                                                                            border = BorderStroke(
+                                                                                width = 1.dp,
+                                                                                color = if (isValuesEnabled) MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f) else Color.Transparent
+                                                                            ),
+                                                                            shape = RoundedCornerShape(12.dp),
+                                                                            modifier = Modifier.fillMaxWidth()
+                                                                        ) {
+                                                                            Row(
+                                                                                modifier = Modifier
+                                                                                    .fillMaxWidth()
+                                                                                    .padding(12.dp),
+                                                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                                                verticalAlignment = Alignment.CenterVertically
+                                                                            ) {
+                                                                                Column(modifier = Modifier.weight(1f)) {
+                                                                                    Text(
+                                                                                        text = "Values Study Mode",
+                                                                                        style = MaterialTheme.typography.bodyMedium,
+                                                                                        fontWeight = FontWeight.Bold,
+                                                                                        color = if (isValuesEnabled) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface
+                                                                                    )
+                                                                                    Text(
+                                                                                        text = "Convert image to mapped grayscale tonal ranges for fine art master copy study.",
+                                                                                        style = MaterialTheme.typography.labelSmall,
+                                                                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                                                                    )
+                                                                                }
+                                                                                Spacer(modifier = Modifier.width(12.dp))
+                                                                                Switch(
+                                                                                    checked = isValuesEnabled,
+                                                                                    onCheckedChange = { viewModel.toggleValuesEnabled(item) }
+                                                                                )
+                                                                            }
+                                                                        }
+
+                                                                        if (isValuesEnabled) {
+                                                                            ValuesStudyPanel(item, viewModel)
+                                                                        } else {
+                                                                            Box(
+                                                                                modifier = Modifier
+                                                                                    .fillMaxWidth()
+                                                                                    .padding(vertical = 12.dp),
+                                                                                contentAlignment = Alignment.Center
+                                                                            ) {
+                                                                                Column(
+                                                                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                                                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                                                                ) {
+                                                                                    Icon(
+                                                                                        imageVector = Icons.Default.Contrast,
+                                                                                        contentDescription = null,
+                                                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                                                                        modifier = Modifier.size(36.dp)
+                                                                                    )
+                                                                                    Text(
+                                                                                        text = "Values study is turned off.",
+                                                                                        style = MaterialTheme.typography.labelMedium,
+                                                                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                                                                    )
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -5395,6 +5375,7 @@ fun SidebarContent(
                                     }
                                 }
                             }
+                    }
                     }
                 }
             }
@@ -5412,12 +5393,17 @@ fun ValuesStudyPanel(
     val result = results[item.id]
 
     // Parse current stops
-    val stops = remember(item.stopsJson, item.stopsCount) {
+    val dbStops = remember(item.stopsJson, item.stopsCount) {
         if (item.stopsJson.isEmpty()) {
             ValueProcessor.generateDefaultStops(item.stopsCount)
         } else {
             ValueProcessor.parseStops(item.stopsJson)
         }
+    }
+
+    var stops by remember(dbStops) { mutableStateOf(dbStops) }
+    LaunchedEffect(dbStops) {
+        stops = dbStops
     }
 
     var selectedStopIndex by remember { mutableStateOf(0) }
@@ -5445,6 +5431,7 @@ fun ValuesStudyPanel(
 
         // 1. Simplicity Slider
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            var localSimplicity by remember(item.id, item.simplicity) { mutableStateOf(item.simplicity) }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -5456,14 +5443,21 @@ fun ValuesStudyPanel(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "${item.simplicity}",
+                    text = "$localSimplicity",
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.primary
                 )
             }
             Slider(
-                value = item.simplicity.toFloat(),
-                onValueChange = { viewModel.updateSimplicity(item, it.roundToInt()) },
+                value = localSimplicity.toFloat(),
+                onValueChange = {
+                    val nextSimp = it.roundToInt()
+                    localSimplicity = nextSimp
+                    viewModel.updateSimplicityInMemory(item, nextSimp)
+                },
+                onValueChangeFinished = {
+                    viewModel.commitSimplicity(item, localSimplicity)
+                },
                 valueRange = 0f..100f,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -5618,6 +5612,7 @@ fun ValuesStudyPanel(
             
             if (activeStopIndex in stops.indices) {
                 val activeStop = stops[activeStopIndex]
+                var localStopPos by remember(activeStopIndex, activeStop.position) { mutableStateOf(activeStop.position) }
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -5629,17 +5624,22 @@ fun ValuesStudyPanel(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            text = "${(activeStop.position * 100).roundToInt()}%",
+                            text = "${(localStopPos * 100).roundToInt()}%",
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
                     Slider(
-                        value = activeStop.position,
+                        value = localStopPos,
                         onValueChange = { newPos ->
+                            localStopPos = newPos
                             val updatedStops = stops.toMutableList()
                             updatedStops[activeStopIndex] = activeStop.copy(position = newPos.coerceIn(0f, 1f))
-                            viewModel.updateStops(item, updatedStops)
+                            stops = updatedStops
+                            viewModel.updateStopsInMemory(item, updatedStops)
+                        },
+                        onValueChangeFinished = {
+                            viewModel.commitStops(item, stops)
                         },
                         valueRange = 0f..1f,
                         modifier = Modifier.fillMaxWidth()
@@ -5683,6 +5683,7 @@ fun ValuesStudyPanel(
                                     .clickable {
                                         val updatedStops = stops.toMutableList()
                                         updatedStops[activeStopIndex] = activeStop.copy(color = presetColor.toArgb())
+                                        stops = updatedStops
                                         viewModel.updateStops(item, updatedStops)
                                     }
                             )
@@ -5752,5 +5753,571 @@ fun Modifier.customShadow(
             radiusY = borderRadius.toPx(),
             paint = paint
         )
+    }
+}
+
+@Composable
+fun CropImageDialog(
+    item: CanvasItem,
+    viewModel: DroidCanvasViewModel,
+    onDismiss: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
+
+    // States for crop boundaries in normalized float (0.0f .. 1.0f) relative to display image width & height
+    var cropLeft by remember { mutableStateOf(0f) }
+    var cropTop by remember { mutableStateOf(0f) }
+    var cropRight by remember { mutableStateOf(1f) }
+    var cropBottom by remember { mutableStateOf(1f) }
+
+    // Selected Aspect Ratio Mode
+    var aspectMode by remember { mutableStateOf("Free") } // "Free", "1:1", "4:3", "16:9", "3:2"
+
+    // Image native dimensions
+    val imageWidth = item.width
+    val imageHeight = item.height
+    val imageAspectRatio = if (imageHeight > 0f) imageWidth / imageHeight else 1f
+
+    // Standard aspect ratios
+    val targetRatio = when (aspectMode) {
+        "1:1" -> 1f
+        "4:3" -> 4f / 3f
+        "16:9" -> 16f / 9f
+        "3:2" -> 3f / 2f
+        else -> null
+    }
+
+    // Helper to center the crop box with the given aspect ratio
+    fun resetToRatio(ratio: Float?) {
+        if (ratio == null) {
+            cropLeft = 0f
+            cropTop = 0f
+            cropRight = 1f
+            cropBottom = 1f
+            return
+        }
+        val relativeRatio = ratio / imageAspectRatio
+        if (relativeRatio > 1f) {
+            // Target is wider than image aspect ratio, so height must be constrained
+            val newHeight = 1f / relativeRatio
+            cropLeft = 0f
+            cropRight = 1f
+            cropTop = ((1f - newHeight) / 2f).coerceIn(0f, 1f)
+            cropBottom = (cropTop + newHeight).coerceIn(0f, 1f)
+        } else {
+            // Target is narrower than image aspect ratio, so width must be constrained
+            val newWidth = relativeRatio
+            cropTop = 0f
+            cropBottom = 1f
+            cropLeft = ((1f - newWidth) / 2f).coerceIn(0f, 1f)
+            cropRight = (cropLeft + newWidth).coerceIn(0f, 1f)
+        }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .fillMaxHeight(0.85f)
+                .clip(RoundedCornerShape(24.dp)),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Header Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Crop Image",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Interactive Cropper Workspace
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .background(
+                            color = MaterialTheme.colorScheme.surfaceContainerLowest,
+                            shape = RoundedCornerShape(16.dp)
+                        )
+                        .clip(RoundedCornerShape(16.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    // Available workspace size in pixels
+                    val maxWidthPx = constraints.maxWidth.toFloat()
+                    val maxHeightPx = constraints.maxHeight.toFloat()
+
+                    // Fit image aspect ratio inside the workspace
+                    val displayWidth: Float
+                    val displayHeight: Float
+                    if (maxWidthPx / maxHeightPx > imageAspectRatio) {
+                        displayHeight = maxHeightPx
+                        displayWidth = maxHeightPx * imageAspectRatio
+                    } else {
+                        displayWidth = maxWidthPx
+                        displayHeight = maxWidthPx / imageAspectRatio
+                    }
+
+                    val displayWidthDp = with(density) { displayWidth.toDp() }
+                    val displayHeightDp = with(density) { displayHeight.toDp() }
+
+                    // We wrap the display image and crop overlay in a Box matching exact display size
+                    Box(
+                        modifier = Modifier.size(displayWidthDp, displayHeightDp)
+                    ) {
+                        // Display the Image
+                        AsyncImage(
+                            model = coil.request.ImageRequest.Builder(context)
+                                .data(item.fullPath)
+                                .build(),
+                            contentDescription = "Crop Target",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Fit
+                        )
+
+                        // 1. Crop Overlay Canvas (Semi-transparent background + clear crop box + grids)
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val left = cropLeft * size.width
+                            val top = cropTop * size.height
+                            val right = cropRight * size.width
+                            val bottom = cropBottom * size.height
+
+                            // Draw semi-transparent dark mask
+                            drawRect(
+                                color = Color.Black.copy(alpha = 0.65f),
+                                topLeft = Offset(0f, 0f),
+                                size = androidx.compose.ui.geometry.Size(size.width, top)
+                            )
+                            drawRect(
+                                color = Color.Black.copy(alpha = 0.65f),
+                                topLeft = Offset(0f, bottom),
+                                size = androidx.compose.ui.geometry.Size(size.width, size.height - bottom)
+                            )
+                            drawRect(
+                                color = Color.Black.copy(alpha = 0.65f),
+                                topLeft = Offset(0f, top),
+                                size = androidx.compose.ui.geometry.Size(left, bottom - top)
+                            )
+                            drawRect(
+                                color = Color.Black.copy(alpha = 0.65f),
+                                topLeft = Offset(right, top),
+                                size = androidx.compose.ui.geometry.Size(size.width - right, bottom - top)
+                            )
+
+                            // Crop Box Outline
+                            drawRect(
+                                color = Color.White,
+                                topLeft = Offset(left, top),
+                                size = androidx.compose.ui.geometry.Size(right - left, bottom - top),
+                                style = Stroke(width = 2.dp.toPx())
+                            )
+
+                            // Draw Rule of Thirds guidelines
+                            val widthPart = (right - left) / 3f
+                            val heightPart = (bottom - top) / 3f
+
+                            drawLine(
+                                color = Color.White.copy(alpha = 0.35f),
+                                start = Offset(left + widthPart, top),
+                                end = Offset(left + widthPart, bottom),
+                                strokeWidth = 1.dp.toPx()
+                            )
+                            drawLine(
+                                color = Color.White.copy(alpha = 0.35f),
+                                start = Offset(left + 2 * widthPart, top),
+                                end = Offset(left + 2 * widthPart, bottom),
+                                strokeWidth = 1.dp.toPx()
+                            )
+                            drawLine(
+                                color = Color.White.copy(alpha = 0.35f),
+                                start = Offset(left, top + heightPart),
+                                end = Offset(right, top + heightPart),
+                                strokeWidth = 1.dp.toPx()
+                            )
+                            drawLine(
+                                color = Color.White.copy(alpha = 0.35f),
+                                start = Offset(left, top + 2 * heightPart),
+                                end = Offset(right, top + 2 * heightPart),
+                                strokeWidth = 1.dp.toPx()
+                            )
+                        }
+
+                        // Touch Handle Dimensions
+                        val handleSize = 48.dp
+                        val handleSizePx = with(density) { handleSize.toPx() }
+
+                        // 2. Corner Handles with Aspect Ratio constraints support
+                        // Top-Left Handle
+                        Box(
+                            modifier = Modifier
+                                .offset {
+                                    IntOffset(
+                                        (cropLeft * displayWidth - handleSizePx / 2f).roundToInt(),
+                                        (cropTop * displayHeight - handleSizePx / 2f).roundToInt()
+                                    )
+                                }
+                                .size(handleSize)
+                                .pointerInput(displayWidth, displayHeight, aspectMode) {
+                                    detectDragGestures { change, dragAmount ->
+                                        change.consume()
+                                        if (targetRatio != null) {
+                                            val dragAmountX = dragAmount.x / displayWidth
+                                            val newLeft = (cropLeft + dragAmountX).coerceIn(0f, cropRight - 0.1f)
+                                            val relRatio = targetRatio / imageAspectRatio
+                                            var newTop = cropBottom - (cropRight - newLeft) / relRatio
+                                            if (newTop < 0f) {
+                                                newTop = 0f
+                                                val adjustedLeft = cropRight - (cropBottom - newTop) * relRatio
+                                                cropLeft = adjustedLeft.coerceIn(0f, cropRight - 0.1f)
+                                                cropTop = 0f
+                                            } else {
+                                                cropLeft = newLeft
+                                                cropTop = newTop
+                                            }
+                                        } else {
+                                            cropLeft = (cropLeft + dragAmount.x / displayWidth).coerceIn(0f, cropRight - 0.1f)
+                                            cropTop = (cropTop + dragAmount.y / displayHeight).coerceIn(0f, cropBottom - 0.1f)
+                                        }
+                                    }
+                                }
+                        ) {
+                            CornerHandleIndicator(direction = "TL")
+                        }
+
+                        // Top-Right Handle
+                        Box(
+                            modifier = Modifier
+                                .offset {
+                                    IntOffset(
+                                        (cropRight * displayWidth - handleSizePx / 2f).roundToInt(),
+                                        (cropTop * displayHeight - handleSizePx / 2f).roundToInt()
+                                    )
+                                }
+                                .size(handleSize)
+                                .pointerInput(displayWidth, displayHeight, aspectMode) {
+                                    detectDragGestures { change, dragAmount ->
+                                        change.consume()
+                                        if (targetRatio != null) {
+                                            val dragAmountX = dragAmount.x / displayWidth
+                                            val newRight = (cropRight + dragAmountX).coerceIn(cropLeft + 0.1f, 1f)
+                                            val relRatio = targetRatio / imageAspectRatio
+                                            var newTop = cropBottom - (newRight - cropLeft) / relRatio
+                                            if (newTop < 0f) {
+                                                newTop = 0f
+                                                val adjustedRight = cropLeft + (cropBottom - newTop) * relRatio
+                                                cropRight = adjustedRight.coerceIn(cropLeft + 0.1f, 1f)
+                                                cropTop = 0f
+                                            } else {
+                                                cropRight = newRight
+                                                cropTop = newTop
+                                            }
+                                        } else {
+                                            cropRight = (cropRight + dragAmount.x / displayWidth).coerceIn(cropLeft + 0.1f, 1f)
+                                            cropTop = (cropTop + dragAmount.y / displayHeight).coerceIn(0f, cropBottom - 0.1f)
+                                        }
+                                    }
+                                }
+                        ) {
+                            CornerHandleIndicator(direction = "TR")
+                        }
+
+                        // Bottom-Left Handle
+                        Box(
+                            modifier = Modifier
+                                .offset {
+                                    IntOffset(
+                                        (cropLeft * displayWidth - handleSizePx / 2f).roundToInt(),
+                                        (cropBottom * displayHeight - handleSizePx / 2f).roundToInt()
+                                    )
+                                }
+                                .size(handleSize)
+                                .pointerInput(displayWidth, displayHeight, aspectMode) {
+                                    detectDragGestures { change, dragAmount ->
+                                        change.consume()
+                                        if (targetRatio != null) {
+                                            val dragAmountX = dragAmount.x / displayWidth
+                                            val newLeft = (cropLeft + dragAmountX).coerceIn(0f, cropRight - 0.1f)
+                                            val relRatio = targetRatio / imageAspectRatio
+                                            var newBottom = cropTop + (cropRight - newLeft) / relRatio
+                                            if (newBottom > 1f) {
+                                                newBottom = 1f
+                                                val adjustedLeft = cropRight - (newBottom - cropTop) * relRatio
+                                                cropLeft = adjustedLeft.coerceIn(0f, cropRight - 0.1f)
+                                                cropBottom = 1f
+                                            } else {
+                                                cropLeft = newLeft
+                                                cropBottom = newBottom
+                                            }
+                                        } else {
+                                            cropLeft = (cropLeft + dragAmount.x / displayWidth).coerceIn(0f, cropRight - 0.1f)
+                                            cropBottom = (cropBottom + dragAmount.y / displayHeight).coerceIn(cropTop + 0.1f, 1f)
+                                        }
+                                    }
+                                }
+                        ) {
+                            CornerHandleIndicator(direction = "BL")
+                        }
+
+                        // Bottom-Right Handle
+                        Box(
+                            modifier = Modifier
+                                .offset {
+                                    IntOffset(
+                                        (cropRight * displayWidth - handleSizePx / 2f).roundToInt(),
+                                        (cropBottom * displayHeight - handleSizePx / 2f).roundToInt()
+                                    )
+                                }
+                                .size(handleSize)
+                                .pointerInput(displayWidth, displayHeight, aspectMode) {
+                                    detectDragGestures { change, dragAmount ->
+                                        change.consume()
+                                        if (targetRatio != null) {
+                                            val dragAmountX = dragAmount.x / displayWidth
+                                            val newRight = (cropRight + dragAmountX).coerceIn(cropLeft + 0.1f, 1f)
+                                            val relRatio = targetRatio / imageAspectRatio
+                                            var newBottom = cropTop + (newRight - cropLeft) / relRatio
+                                            if (newBottom > 1f) {
+                                                newBottom = 1f
+                                                val adjustedRight = cropLeft + (newBottom - cropTop) * relRatio
+                                                cropRight = adjustedRight.coerceIn(cropLeft + 0.1f, 1f)
+                                                cropBottom = 1f
+                                            } else {
+                                                cropRight = newRight
+                                                cropBottom = newBottom
+                                            }
+                                        } else {
+                                            cropRight = (cropRight + dragAmount.x / displayWidth).coerceIn(cropLeft + 0.1f, 1f)
+                                            cropBottom = (cropBottom + dragAmount.y / displayHeight).coerceIn(cropTop + 0.1f, 1f)
+                                        }
+                                    }
+                                }
+                        ) {
+                            CornerHandleIndicator(direction = "BR")
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Aspect Ratio Selector Chips
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Aspect Ratio",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val modes = listOf("Free", "1:1", "4:3", "16:9", "3:2")
+                        modes.forEach { mode ->
+                            val isSelected = aspectMode == mode
+                            CropRatioChip(
+                                text = mode,
+                                isSelected = isSelected,
+                                onClick = {
+                                    aspectMode = mode
+                                    val newTargetRatio = when (mode) {
+                                        "1:1" -> 1f
+                                        "4:3" -> 4f / 3f
+                                        "16:9" -> 16f / 9f
+                                        "3:2" -> 3f / 2f
+                                        else -> null
+                                    }
+                                    resetToRatio(newTargetRatio)
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Action Buttons Footer
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .height(48.dp)
+                            .testTag("crop_cancel_button")
+                    ) {
+                        Text("Cancel")
+                    }
+                    Button(
+                        onClick = {
+                            viewModel.cropCanvasItem(
+                                context = context,
+                                item = item,
+                                cropLeft = cropLeft,
+                                cropTop = cropTop,
+                                cropRight = cropRight,
+                                cropBottom = cropBottom
+                            )
+                            onDismiss()
+                        },
+                        modifier = Modifier
+                            .height(48.dp)
+                            .testTag("crop_apply_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Apply Crop")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CropRatioChip(
+    text: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(12.dp),
+        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .height(40.dp)
+            .testTag("crop_ratio_$text")
+    ) {
+        Box(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+            )
+        }
+    }
+}
+
+@Composable
+fun CornerHandleIndicator(direction: String) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = when (direction) {
+            "TL" -> Alignment.TopStart
+            "TR" -> Alignment.TopEnd
+            "BL" -> Alignment.BottomStart
+            "BR" -> Alignment.BottomEnd
+            else -> Alignment.Center
+        }
+    ) {
+        Canvas(modifier = Modifier.size(24.dp)) {
+            val strokeWidth = 3.dp.toPx()
+            val length = 16.dp.toPx()
+            val color = Color.White
+
+            when (direction) {
+                "TL" -> {
+                    drawLine(
+                        color = color,
+                        start = Offset(0f, strokeWidth / 2),
+                        end = Offset(length, strokeWidth / 2),
+                        strokeWidth = strokeWidth
+                    )
+                    drawLine(
+                        color = color,
+                        start = Offset(strokeWidth / 2, 0f),
+                        end = Offset(strokeWidth / 2, length),
+                        strokeWidth = strokeWidth
+                    )
+                }
+                "TR" -> {
+                    drawLine(
+                        color = color,
+                        start = Offset(size.width - length, strokeWidth / 2),
+                        end = Offset(size.width, strokeWidth / 2),
+                        strokeWidth = strokeWidth
+                    )
+                    drawLine(
+                        color = color,
+                        start = Offset(size.width - strokeWidth / 2, 0f),
+                        end = Offset(size.width - strokeWidth / 2, length),
+                        strokeWidth = strokeWidth
+                    )
+                }
+                "BL" -> {
+                    drawLine(
+                        color = color,
+                        start = Offset(0f, size.height - strokeWidth / 2),
+                        end = Offset(length, size.height - strokeWidth / 2),
+                        strokeWidth = strokeWidth
+                    )
+                    drawLine(
+                        color = color,
+                        start = Offset(strokeWidth / 2, size.height - length),
+                        end = Offset(strokeWidth / 2, size.height),
+                        strokeWidth = strokeWidth
+                    )
+                }
+                "BR" -> {
+                    drawLine(
+                        color = color,
+                        start = Offset(size.width - length, size.height - strokeWidth / 2),
+                        end = Offset(size.width, size.height - strokeWidth / 2),
+                        strokeWidth = strokeWidth
+                    )
+                    drawLine(
+                        color = color,
+                        start = Offset(size.width - strokeWidth / 2, size.height - length),
+                        end = Offset(size.width - strokeWidth / 2, size.height),
+                        strokeWidth = strokeWidth
+                    )
+                }
+            }
+        }
     }
 }
