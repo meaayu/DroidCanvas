@@ -17,7 +17,7 @@
 
 ## About
 
-DroidCanvas brings a professional reference board experience directly to your Android device. Organize visual references with an infinite canvas, precise controls, and automatic saving — no account required.
+DroidCanvas brings a professional reference board experience directly to your Android device. Organize visual references with an infinite canvas, precise controls, and automatic saving — no account needed.
 
 ---
 
@@ -84,10 +84,17 @@ cd DroidCanvas
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Commit your changes: `git commit -m 'Add amazing feature'`
-4. Push and open a Pull Request
+We'd love your contributions! Please check out our [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines on:
+- How to set up your development environment
+- Our commit convention standards
+- The Pull Request process
+
+Quick start:
+```bash
+git clone https://github.com/meaayu/DroidCanvas.git
+cd DroidCanvas
+./gradlew assembleDebug
+```
 
 **Requirements:** Android Studio, Kotlin 1.9+, API 26+
 
