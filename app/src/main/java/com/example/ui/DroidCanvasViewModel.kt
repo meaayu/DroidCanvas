@@ -32,9 +32,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.update
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
+import android.widget.Toast
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
+import kotlin.math.roundToInt
 
 data class DrawingStroke(
     val id: String = UUID.randomUUID().toString(),
@@ -84,7 +88,7 @@ class DroidCanvasViewModel(
     )
 
     // Canvas Items for the current board
-    val canvasItems: StateFlow<List<CanvasItem>> = _currentBoardId
+    private val dbCanvasItems: StateFlow<List<CanvasItem>> = _currentBoardId
         .flatMapLatest { boardId ->
             if (boardId != null) {
                 repository.getItemsForBoard(boardId).onEach {
@@ -101,12 +105,23 @@ class DroidCanvasViewModel(
             initialValue = emptyList()
         )
 
+    private val _itemOverrides = MutableStateFlow<Map<Int, CanvasItem>>(emptyMap())
+
+    val canvasItems: StateFlow<List<CanvasItem>> = combine(dbCanvasItems, _itemOverrides) { dbItems, overrides ->
+        dbItems.map { item -> overrides[item.id] ?: item }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
     private val _valuesResults = MutableStateFlow<Map<Int, ValuesResult>>(emptyMap())
     val valuesResults: StateFlow<Map<Int, ValuesResult>> = _valuesResults.asStateFlow()
 
     private val processingJobs = java.util.concurrent.ConcurrentHashMap<Int, Job>()
     private val lastProcessedConfigs = java.util.concurrent.ConcurrentHashMap<Int, String>()
     private val updateJobs = java.util.concurrent.ConcurrentHashMap<Int, Job>()
+    private val decodedBitmapCache = android.util.LruCache<String, Bitmap>(5)
 
     // Undo/Redo Stacks
     private val undoStack = mutableListOf<List<CanvasItem>>()
@@ -239,12 +254,17 @@ class DroidCanvasViewModel(
         }
     }
 
+    private var isCenteringAnimated = false
+
     // Canvas view states (panned and zoomed) with debounced database persistence
     private var _canvasScale = mutableStateOf(1f)
     var canvasScale: Float
         get() = _canvasScale.value
         set(value) {
             if (_canvasScale.value != value) {
+                if (!isCenteringAnimated) {
+                    cancelCentering()
+                }
                 _canvasScale.value = value
                 schedulePersistCanvasState()
             }
@@ -255,6 +275,9 @@ class DroidCanvasViewModel(
         get() = _canvasTranslateX.value
         set(value) {
             if (_canvasTranslateX.value != value) {
+                if (!isCenteringAnimated) {
+                    cancelCentering()
+                }
                 _canvasTranslateX.value = value
                 schedulePersistCanvasState()
             }
@@ -265,6 +288,9 @@ class DroidCanvasViewModel(
         get() = _canvasTranslateY.value
         set(value) {
             if (_canvasTranslateY.value != value) {
+                if (!isCenteringAnimated) {
+                    cancelCentering()
+                }
                 _canvasTranslateY.value = value
                 schedulePersistCanvasState()
             }
@@ -566,6 +592,7 @@ class DroidCanvasViewModel(
         persistJob?.cancel() // Cancel any pending saves when switching boards
         _loadedBoardId.value = null // Reset loaded ID immediately to trigger isLoaded = false during transition
         _currentBoardId.value = boardId
+        _itemOverrides.value = emptyMap()
         if (boardId != null) {
             _canvasScale.value = prefs.getFloat("board_scale_$boardId", 1f)
             _canvasTranslateX.value = prefs.getFloat("board_trans_x_$boardId", 0f)
@@ -781,19 +808,8 @@ class DroidCanvasViewModel(
                 // First pass: scale every item so its visual height is exactly targetDimensionPx
                 // keeping its aspect ratio intact.
                 val processedItems = sortedItems.map { item ->
-                    val nativeWidthDp = item.width / density
-                    val nativeHeightDp = item.height / density
-                    
-                    val maxBound = 320f
-                    val maxDimension = maxOf(nativeWidthDp, nativeHeightDp)
-                    val scaleFactor = if (maxDimension > maxBound) {
-                        maxBound / maxDimension
-                    } else {
-                        1f
-                    }
-                    
-                    val displayWidthPx = nativeWidthDp * scaleFactor * density
-                    val displayHeightPx = nativeHeightDp * scaleFactor * density
+                    val displayWidthPx = item.width
+                    val displayHeightPx = item.height
                     
                     // We want visualHeightPx to be exactly targetDimensionPx.
                     // Since visualHeightPx = displayHeightPx * scale, we solve for scale:
@@ -837,19 +853,8 @@ class DroidCanvasViewModel(
                 // First pass: scale every item so its visual height is exactly targetDimensionPx
                 // keeping its aspect ratio intact.
                 val processedItems = sortedItems.map { item ->
-                    val nativeWidthDp = item.width / density
-                    val nativeHeightDp = item.height / density
-                    
-                    val maxBound = 320f
-                    val maxDimension = maxOf(nativeWidthDp, nativeHeightDp)
-                    val scaleFactor = if (maxDimension > maxBound) {
-                        maxBound / maxDimension
-                    } else {
-                        1f
-                    }
-                    
-                    val displayWidthPx = nativeWidthDp * scaleFactor * density
-                    val displayHeightPx = nativeHeightDp * scaleFactor * density
+                    val displayWidthPx = item.width
+                    val displayHeightPx = item.height
                     
                     // We want visualHeightPx to be exactly targetDimensionPx.
                     // Since visualHeightPx = displayHeightPx * scale, we solve for scale:
@@ -879,19 +884,8 @@ class DroidCanvasViewModel(
             } else if (layoutType == "COLUMN") { // "COLUMN" (Vertical single-column layout)
                 // Scale every item so its visual width is exactly targetDimensionPx
                 val processedItems = sortedItems.map { item ->
-                    val nativeWidthDp = item.width / density
-                    val nativeHeightDp = item.height / density
-                    
-                    val maxBound = 320f
-                    val maxDimension = maxOf(nativeWidthDp, nativeHeightDp)
-                    val scaleFactor = if (maxDimension > maxBound) {
-                        maxBound / maxDimension
-                    } else {
-                        1f
-                    }
-                    
-                    val displayWidthPx = nativeWidthDp * scaleFactor * density
-                    val displayHeightPx = nativeHeightDp * scaleFactor * density
+                    val displayWidthPx = item.width
+                    val displayHeightPx = item.height
                     
                     // Scale so that visualWidthPx matches targetDimensionPx:
                     val targetScale = if (displayWidthPx > 0f) targetDimensionPx / displayWidthPx else 1f
@@ -918,19 +912,8 @@ class DroidCanvasViewModel(
             } else if (layoutType == "RADIAL") { // "RADIAL" (Circular distribution)
                 // Scale items uniformly by height
                 val processedItems = sortedItems.map { item ->
-                    val nativeWidthDp = item.width / density
-                    val nativeHeightDp = item.height / density
-                    
-                    val maxBound = 320f
-                    val maxDimension = maxOf(nativeWidthDp, nativeHeightDp)
-                    val scaleFactor = if (maxDimension > maxBound) {
-                        maxBound / maxDimension
-                    } else {
-                        1f
-                    }
-                    
-                    val displayWidthPx = nativeWidthDp * scaleFactor * density
-                    val displayHeightPx = nativeHeightDp * scaleFactor * density
+                    val displayWidthPx = item.width
+                    val displayHeightPx = item.height
                     
                     val targetScale = if (displayHeightPx > 0f) targetDimensionPx / displayHeightPx else 1f
                     
@@ -957,19 +940,8 @@ class DroidCanvasViewModel(
             } else if (layoutType == "SPREAD") { // "SPREAD" (Beautiful overlapping Moodboard Spread)
                 // Scale items uniformly by height
                 val processedItems = sortedItems.map { item ->
-                    val nativeWidthDp = item.width / density
-                    val nativeHeightDp = item.height / density
-                    
-                    val maxBound = 320f
-                    val maxDimension = maxOf(nativeWidthDp, nativeHeightDp)
-                    val scaleFactor = if (maxDimension > maxBound) {
-                        maxBound / maxDimension
-                    } else {
-                        1f
-                    }
-                    
-                    val displayWidthPx = nativeWidthDp * scaleFactor * density
-                    val displayHeightPx = nativeHeightDp * scaleFactor * density
+                    val displayWidthPx = item.width
+                    val displayHeightPx = item.height
                     
                     val targetScale = if (displayHeightPx > 0f) targetDimensionPx / displayHeightPx else 1f
                     val visualWidthPx = displayWidthPx * targetScale
@@ -1131,12 +1103,78 @@ class DroidCanvasViewModel(
         }
     }
 
+    fun updateItemScaleInMemory(item: CanvasItem, targetScale: Float) {
+        if (item.isPinned) return
+        val updated = item.copy(scale = targetScale.coerceIn(0.05f, 10f))
+        _itemOverrides.update { current -> current + (item.id to updated) }
+    }
+
+    fun commitItemScale(item: CanvasItem, targetScale: Float) {
+        if (item.isPinned) return
+        saveCurrentStateToUndo()
+        viewModelScope.launch(Dispatchers.IO) {
+            val updated = item.copy(scale = targetScale.coerceIn(0.05f, 10f))
+            repository.updateCanvasItem(updated)
+            _itemOverrides.update { current -> current - item.id }
+        }
+    }
+
     fun updateItemAbsoluteRotation(item: CanvasItem, targetRotation: Float) {
         if (item.isPinned) return
         saveCurrentStateToUndo()
         viewModelScope.launch(Dispatchers.IO) {
             val updated = item.copy(rotation = (targetRotation % 360f + 360f) % 360f)
             repository.updateCanvasItem(updated)
+        }
+    }
+
+    fun updateItemRotationInMemory(item: CanvasItem, targetRotation: Float) {
+        if (item.isPinned) return
+        val updated = item.copy(rotation = (targetRotation % 360f + 360f) % 360f)
+        _itemOverrides.update { current -> current + (item.id to updated) }
+    }
+
+    fun commitItemRotation(item: CanvasItem, targetRotation: Float) {
+        if (item.isPinned) return
+        saveCurrentStateToUndo()
+        viewModelScope.launch(Dispatchers.IO) {
+            val updated = item.copy(rotation = (targetRotation % 360f + 360f) % 360f)
+            repository.updateCanvasItem(updated)
+            _itemOverrides.update { current -> current - item.id }
+        }
+    }
+
+    fun updateSimplicityInMemory(item: CanvasItem, simplicity: Int) {
+        val updated = item.copy(simplicity = simplicity.coerceIn(0, 100))
+        _itemOverrides.update { current -> current + (item.id to updated) }
+        scheduleValuesProcessing(updated)
+    }
+
+    fun commitSimplicity(item: CanvasItem, simplicity: Int) {
+        saveCurrentStateToUndo()
+        viewModelScope.launch(Dispatchers.IO) {
+            val updated = item.copy(simplicity = simplicity.coerceIn(0, 100))
+            repository.updateCanvasItem(updated)
+            _itemOverrides.update { current -> current - item.id }
+        }
+    }
+
+    fun updateStopsInMemory(item: CanvasItem, stops: List<ValueStop>) {
+        val sorted = stops.sortedBy { it.position }
+        val json = ValueProcessor.serializeStops(sorted)
+        val updated = item.copy(stopsJson = json, stopsCount = sorted.size)
+        _itemOverrides.update { current -> current + (item.id to updated) }
+        scheduleValuesProcessing(updated)
+    }
+
+    fun commitStops(item: CanvasItem, stops: List<ValueStop>) {
+        saveCurrentStateToUndo()
+        viewModelScope.launch(Dispatchers.IO) {
+            val sorted = stops.sortedBy { it.position }
+            val json = ValueProcessor.serializeStops(sorted)
+            val updated = item.copy(stopsJson = json, stopsCount = sorted.size)
+            repository.updateCanvasItem(updated)
+            _itemOverrides.update { current -> current - item.id }
         }
     }
 
@@ -1222,11 +1260,18 @@ class DroidCanvasViewModel(
         processingJobs[itemId]?.cancel()
 
         val job = viewModelScope.launch(Dispatchers.Default) {
-            delay(80)
+            delay(150)
 
             try {
                 lastProcessedConfigs[itemId] = configSignature
-                val bitmap = BitmapFactory.decodeFile(path) ?: return@launch
+                var bitmap = decodedBitmapCache.get(path)
+                if (bitmap == null) {
+                    bitmap = BitmapFactory.decodeFile(path)
+                    if (bitmap != null) {
+                        decodedBitmapCache.put(path, bitmap)
+                    }
+                }
+                if (bitmap == null) return@launch
                 
                 val stops = if (item.stopsJson.isEmpty()) {
                     ValueProcessor.generateDefaultStops(item.stopsCount)
@@ -1345,13 +1390,8 @@ class DroidCanvasViewModel(
         var maxY = Float.MIN_VALUE
 
         items.forEach { item ->
-            val nativeWidthDp = item.width / density
-            val nativeHeightDp = item.height / density
-            val maxDimensionDp = maxOf(nativeWidthDp, nativeHeightDp)
-            val scaleFactor = if (maxDimensionDp > 320f) 320f / maxDimensionDp else 1f
-            
-            val itemWidthPx = item.width * scaleFactor * item.scale
-            val itemHeightPx = item.height * scaleFactor * item.scale
+            val itemWidthPx = item.width * item.scale
+            val itemHeightPx = item.height * item.scale
             
             val left = item.posX
             val top = item.posY
@@ -1386,14 +1426,16 @@ class DroidCanvasViewModel(
         canvasTranslateY = viewportCenterY - contentCenterY * newScale
     }
 
+    private var centerJob: Job? = null
+
+    fun cancelCentering() {
+        centerJob?.cancel()
+        centerJob = null
+    }
+
     fun centerOnItem(item: CanvasItem, viewportWidth: Float, viewportHeight: Float, density: Float) {
-        val nativeWidthDp = item.width / density
-        val nativeHeightDp = item.height / density
-        val maxDimensionDp = maxOf(nativeWidthDp, nativeHeightDp)
-        val scaleFactor = if (maxDimensionDp > 320f) 320f / maxDimensionDp else 1f
-        
-        val itemWidthPx = item.width * scaleFactor * item.scale
-        val itemHeightPx = item.height * scaleFactor * item.scale
+        val itemWidthPx = item.width * item.scale
+        val itemHeightPx = item.height * item.scale
         
         val itemCenterX = item.posX + itemWidthPx / 2f
         val itemCenterY = item.posY + itemHeightPx / 2f
@@ -1401,9 +1443,38 @@ class DroidCanvasViewModel(
         val viewportCenterX = viewportWidth / 2f
         val viewportCenterY = viewportHeight / 2f
         
-        canvasTranslateX = viewportCenterX - itemCenterX * canvasScale
-        canvasTranslateY = viewportCenterY - itemCenterY * canvasScale
+        val targetTranslateX = viewportCenterX - itemCenterX * canvasScale
+        val targetTranslateY = viewportCenterY - itemCenterY * canvasScale
+        
         selectItem(item.id)
+
+        centerJob?.cancel()
+        centerJob = viewModelScope.launch(Dispatchers.Main) {
+            isCenteringAnimated = true
+            try {
+                val startX = canvasTranslateX
+                val startY = canvasTranslateY
+                val durationMs = 350f
+                val startTime = System.currentTimeMillis()
+                while (true) {
+                    val elapsed = System.currentTimeMillis() - startTime
+                    if (elapsed >= durationMs) {
+                        canvasTranslateX = targetTranslateX
+                        canvasTranslateY = targetTranslateY
+                        break
+                    }
+                    val fraction = elapsed / durationMs
+                    // Cubic ease-out interpolation
+                    val t = 1f - fraction
+                    val easeOut = 1f - t * t * t
+                    canvasTranslateX = startX + (targetTranslateX - startX) * easeOut
+                    canvasTranslateY = startY + (targetTranslateY - startY) * easeOut
+                    delay(16)
+                }
+            } finally {
+                isCenteringAnimated = false
+            }
+        }
     }
 
     fun handleCanvasTap(tapX: Float, tapY: Float, density: Float) {
@@ -1415,13 +1486,8 @@ class DroidCanvasViewModel(
         val items = canvasItems.value
         
         val overlappingItems = items.filter { item ->
-            val nativeWidthDp = item.width / density
-            val nativeHeightDp = item.height / density
-            val maxDimensionDp = maxOf(nativeWidthDp, nativeHeightDp)
-            val scaleFactor = if (maxDimensionDp > 320f) 320f / maxDimensionDp else 1f
-            
-            val itemWidthPx = item.width * scaleFactor * item.scale
-            val itemHeightPx = item.height * scaleFactor * item.scale
+            val itemWidthPx = item.width * item.scale
+            val itemHeightPx = item.height * item.scale
             
             canvasX >= item.posX && canvasX <= item.posX + itemWidthPx &&
             canvasY >= item.posY && canvasY <= item.posY + itemHeightPx
@@ -1452,13 +1518,8 @@ class DroidCanvasViewModel(
             doubleTapZoomTarget
         }
         
-        val nativeWidthDp = item.width / density
-        val nativeHeightDp = item.height / density
-        val maxDimensionDp = maxOf(nativeWidthDp, nativeHeightDp)
-        val scaleFactor = if (maxDimensionDp > 320f) 320f / maxDimensionDp else 1f
-        
-        val itemWidthPx = item.width * scaleFactor * item.scale
-        val itemHeightPx = item.height * scaleFactor * item.scale
+        val itemWidthPx = item.width * item.scale
+        val itemHeightPx = item.height * item.scale
         
         val itemCenterX = item.posX + itemWidthPx / 2f
         val itemCenterY = item.posY + itemHeightPx / 2f
@@ -1471,6 +1532,140 @@ class DroidCanvasViewModel(
         canvasTranslateY = viewportCenterY - itemCenterY * targetScale
         
         selectItem(item.id)
+    }
+
+    fun cropCanvasItem(
+        context: Context,
+        item: CanvasItem,
+        cropLeft: Float,
+        cropTop: Float,
+        cropRight: Float,
+        cropBottom: Float
+    ) {
+        saveCurrentStateToUndo()
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val originalFilePath = item.fullPath
+                val originalFile = File(originalFilePath)
+                if (!originalFile.exists()) {
+                    Log.e("DroidCanvasViewModel", "Original image file does not exist: $originalFilePath")
+                    return@launch
+                }
+
+                // 1. Get EXIF rotation of the original image
+                var rotationDegrees = 0
+                try {
+                    val exifInterface = ExifInterface(originalFilePath)
+                    val orientation = exifInterface.getAttributeInt(
+                        ExifInterface.TAG_ORIENTATION,
+                        ExifInterface.ORIENTATION_NORMAL
+                    )
+                    rotationDegrees = when (orientation) {
+                        ExifInterface.ORIENTATION_ROTATE_90 -> 90
+                        ExifInterface.ORIENTATION_ROTATE_180 -> 180
+                        ExifInterface.ORIENTATION_ROTATE_270 -> 270
+                        else -> 0
+                    }
+                } catch (e: Exception) {
+                    Log.e("DroidCanvasViewModel", "Error reading EXIF", e)
+                }
+
+                // 2. Load the original bitmap
+                val originalBitmap = BitmapFactory.decodeFile(originalFilePath)
+                if (originalBitmap == null) {
+                    Log.e("DroidCanvasViewModel", "Failed to decode original bitmap")
+                    return@launch
+                }
+
+                // 3. Rotate bitmap if needed to match displayed orientation
+                val rotatedBitmap = if (rotationDegrees != 0) {
+                    val matrix = Matrix().apply { postRotate(rotationDegrees.toFloat()) }
+                    val rotated = Bitmap.createBitmap(
+                        originalBitmap, 0, 0, originalBitmap.width, originalBitmap.height, matrix, true
+                    )
+                    if (rotated != originalBitmap) {
+                        originalBitmap.recycle()
+                    }
+                    rotated
+                } else {
+                    originalBitmap
+                }
+
+                // 4. Calculate crop coordinates on the rotated (display-oriented) bitmap
+                val x = (cropLeft * rotatedBitmap.width).roundToInt().coerceIn(0, rotatedBitmap.width - 1)
+                val y = (cropTop * rotatedBitmap.height).roundToInt().coerceIn(0, rotatedBitmap.height - 1)
+                val width = ((cropRight - cropLeft) * rotatedBitmap.width).roundToInt().coerceIn(1, rotatedBitmap.width - x)
+                val height = ((cropBottom - cropTop) * rotatedBitmap.height).roundToInt().coerceIn(1, rotatedBitmap.height - y)
+
+                // 5. Crop the bitmap
+                val croppedBitmap = Bitmap.createBitmap(rotatedBitmap, x, y, width, height)
+
+                // 6. Generate new files and paths to prevent caching issues and keep original intact in undo stack
+                val id = UUID.randomUUID().toString()
+                val extension = "jpg"
+                val newFullFile = File(context.filesDir, "ref_full_$id.$extension")
+                val newThumbFile = File(context.filesDir, "ref_thumb_$id.jpg")
+
+                FileOutputStream(newFullFile).use { out ->
+                    croppedBitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
+                }
+
+                // Save thumbnail
+                val maxDim = maxOf(width, height)
+                val scale = if (maxDim > 400) 400f / maxDim else 1f
+                val tW = (width * scale).roundToInt().coerceAtLeast(1)
+                val tH = (height * scale).roundToInt().coerceAtLeast(1)
+                val thumbBitmap = Bitmap.createScaledBitmap(croppedBitmap, tW, tH, true)
+                FileOutputStream(newThumbFile).use { out ->
+                    thumbBitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+                }
+
+                // 7. Calculate new visual offset/position of the cropped image in canvas space
+                val visualCropLeftPx = cropLeft * item.width * item.scale
+                val visualCropTopPx = cropTop * item.height * item.scale
+
+                // Account for rotation of the offset vector if the canvas item is rotated!
+                val rotatedOffset = CanvasMathHelper.rotateDragAmount(visualCropLeftPx, visualCropTopPx, item.rotation)
+
+                val newPosX = item.posX + rotatedOffset.posX
+                val newPosY = item.posY + rotatedOffset.posY
+
+                val newScale = item.scale
+
+                // 8. Update database
+                val updated = item.copy(
+                    fullPath = newFullFile.absolutePath,
+                    thumbPath = newThumbFile.absolutePath,
+                    width = width.toFloat(),
+                    height = height.toFloat(),
+                    posX = newPosX,
+                    posY = newPosY,
+                    scale = newScale
+                )
+                repository.updateCanvasItem(updated)
+
+                // Clean up bitmaps
+                croppedBitmap.recycle()
+                if (rotatedBitmap != originalBitmap) {
+                    rotatedBitmap.recycle()
+                }
+                originalBitmap.recycle()
+                thumbBitmap.recycle()
+                
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Image cropped successfully", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Log.e("DroidCanvasViewModel", "Error cropping image", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Error cropping image: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    private fun displayDensity(context: Context): Float {
+        return context.resources.displayMetrics.density
     }
 }
 
