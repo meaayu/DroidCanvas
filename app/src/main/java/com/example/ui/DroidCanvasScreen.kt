@@ -203,6 +203,7 @@ import coil.request.ImageRequest
 import com.example.BuildConfig
 import com.example.data.Board
 import com.example.data.CanvasItem
+import com.example.ui.composables.*
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -239,6 +240,7 @@ fun DroidCanvasScreen(
     val isMultiSelectMode by viewModel.isMultiSelectMode.collectAsState()
     val selectedItemIds by viewModel.selectedItemIds.collectAsState()
     val isLoaded by viewModel.isLoaded.collectAsState()
+    val selectedItem = remember(selectedItemId, canvasItems) { canvasItems.find { it.id == selectedItemId } }
     val isDrawModeEnabled = viewModel.isDrawModeEnabled
 
     val themeMode = viewModel.themeMode
@@ -420,112 +422,6 @@ fun DroidCanvasScreen(
                         }
                     }
                 }
-                .drawBehind {
-                    // Deep elegant slate background that dynamically matches system Material You colors
-                    drawRect(color = slateBackgroundColor)
-                    
-                    // Fine neon blue dots that adapt to theme accent
-                    val gridSize = 45.dp.toPx()
-                    val scale = viewModel.canvasScale
-                    val transX = viewModel.canvasTranslateX
-                    val transY = viewModel.canvasTranslateY
-                    
-                    val width = size.width
-                    val height = size.height
-                    
-                    val startX = -transX / scale
-                    val endX = (width - transX) / scale
-                    val startY = -transY / scale
-                    val endY = (height - transY) / scale
-                    
-                    val startGridX = startX - (startX % gridSize) - gridSize
-                    val startGridY = startY - (startY % gridSize) - gridSize
-
-                    val stepMultiplier = when {
-                        scale < 0.22f -> 6
-                        scale < 0.45f -> 3
-                        scale < 0.75f -> 2
-                        else -> 1
-                    }
-                    val effectiveGridSize = gridSize * stepMultiplier
-                    
-                    val dotColor = slateGridDotColor
-                    
-                    var currX = startGridX
-                    if (viewModel.gridStyle == "dots") {
-                        while (currX < endX + effectiveGridSize) {
-                            val screenX = currX * scale + transX
-                            var currY = startGridY
-                            while (currY < endY + effectiveGridSize) {
-                                val screenY = currY * scale + transY
-                                drawCircle(
-                                    color = dotColor,
-                                    radius = (1.8f * scale).coerceIn(1.2f, 4.0f),
-                                    center = Offset(screenX, screenY)
-                                )
-                                currY += effectiveGridSize
-                            }
-                            currX += effectiveGridSize
-                        }
-                    } else if (viewModel.gridStyle == "lines") {
-                        // Draw vertical lines
-                        while (currX < endX + effectiveGridSize) {
-                            val screenX = currX * scale + transX
-                            drawLine(
-                                color = dotColor.copy(alpha = dotColor.alpha * 0.45f),
-                                start = Offset(screenX, 0f),
-                                end = Offset(screenX, height),
-                                strokeWidth = (1.2f * scale).coerceIn(0.8f, 2.5f)
-                            )
-                            currX += effectiveGridSize
-                        }
-                        // Draw horizontal lines
-                        var currY = startGridY
-                        while (currY < endY + effectiveGridSize) {
-                            val screenY = currY * scale + transY
-                            drawLine(
-                                color = dotColor.copy(alpha = dotColor.alpha * 0.45f),
-                                start = Offset(0f, screenY),
-                                end = Offset(width, screenY),
-                                strokeWidth = (1.2f * scale).coerceIn(0.8f, 2.5f)
-                            )
-                            currY += effectiveGridSize
-                        }
-                    } else if (viewModel.gridStyle == "graph") {
-                        // Draw horizontal & vertical lines with major lines every 5 subdivisions
-                        while (currX < endX + effectiveGridSize) {
-                            val screenX = currX * scale + transX
-                            val index = (currX / gridSize).roundToInt()
-                            val isMajor = index % 5 == 0
-                            val alphaFactor = if (isMajor) 0.8f else 0.25f
-                            val strokeWidthFactor = if (isMajor) 2.0f else 1.0f
-                            drawLine(
-                                color = dotColor.copy(alpha = dotColor.alpha * alphaFactor * 0.45f),
-                                start = Offset(screenX, 0f),
-                                end = Offset(screenX, height),
-                                strokeWidth = (strokeWidthFactor * 1.2f * scale).coerceIn(0.8f, 3.5f)
-                            )
-                            currX += effectiveGridSize
-                        }
-                        var currY = startGridY
-                        while (currY < endY + effectiveGridSize) {
-                            val screenY = currY * scale + transY
-                            val index = (currY / gridSize).roundToInt()
-                            val isMajor = index % 5 == 0
-                            val alphaFactor = if (isMajor) 0.8f else 0.25f
-                            val strokeWidthFactor = if (isMajor) 2.0f else 1.0f
-                            drawLine(
-                                color = dotColor.copy(alpha = dotColor.alpha * alphaFactor * 0.45f),
-                                start = Offset(0f, screenY),
-                                end = Offset(width, screenY),
-                                strokeWidth = (strokeWidthFactor * 1.2f * scale).coerceIn(0.8f, 3.5f)
-                            )
-                            currY += effectiveGridSize
-                        }
-                    }
-                    
-
-                }
                 // Background Canvas gestures: Tap to unselect, transform gestures to zoom and pan with inertial scrolling
                 .pointerInput(Unit) {
                     awaitEachGesture {
@@ -650,6 +546,15 @@ fun DroidCanvasScreen(
                     }
                 }
         ) {
+            CanvasGridBackground(
+                canvasScale = viewModel.canvasScale,
+                canvasTranslateX = viewModel.canvasTranslateX,
+                canvasTranslateY = viewModel.canvasTranslateY,
+                gridStyle = viewModel.gridStyle,
+                slateBackgroundColor = slateBackgroundColor,
+                slateGridDotColor = slateGridDotColor
+            )
+
             // 2. THE INFINITE BOARD IMAGE LAYER
             Box(
                 modifier = Modifier
@@ -664,11 +569,21 @@ fun DroidCanvasScreen(
                     }
             ) {
                 if (isLoaded) {
-                    // Render each image on the canvas
-                    canvasItems.forEach { item ->
+                    // Render each image on the canvas with viewport-aware virtual scrolling/culling
+                    CanvasItemLayer(
+                        canvasItems = canvasItems,
+                        canvasScale = viewModel.canvasScale,
+                        canvasTranslateX = viewModel.canvasTranslateX,
+                        canvasTranslateY = viewModel.canvasTranslateY,
+                        viewportWidth = viewportWidth,
+                        viewportHeight = viewportHeight,
+                        isMultiSelectMode = isMultiSelectMode,
+                        selectedItemId = selectedItemId,
+                        selectedItemIds = selectedItemIds
+                    ) { item, isSelected ->
                         CanvasItemView(
                             item = item,
-                            isSelected = if (isMultiSelectMode) selectedItemIds.contains(item.id) else selectedItemId == item.id,
+                            isSelected = isSelected,
                             viewModel = viewModel,
                             globalIsMultiTouch = globalIsMultiTouch,
                             viewportWidth = viewportWidth,
@@ -679,180 +594,19 @@ fun DroidCanvasScreen(
                     // Render completed and active drawing strokes
                     val drawingStrokes by viewModel.drawingStrokes.collectAsState()
                     val activeStroke = viewModel.activeStroke
-                    
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        drawingStrokes.forEach { stroke ->
-                            val path = Path().apply {
-                                if (stroke.points.isNotEmpty()) {
-                                    moveTo(stroke.points.first().x, stroke.points.first().y)
-                                    for (i in 1 until stroke.points.size) {
-                                        lineTo(stroke.points[i].x, stroke.points[i].y)
-                                    }
-                                }
-                            }
-                            drawPath(
-                                path = path,
-                                color = Color(stroke.color),
-                                style = Stroke(
-                                    width = stroke.strokeWidth,
-                                    cap = StrokeCap.Round,
-                                    join = StrokeJoin.Round
-                                )
-                            )
-                        }
-                        activeStroke?.let { stroke ->
-                            val path = Path().apply {
-                                if (stroke.points.isNotEmpty()) {
-                                    moveTo(stroke.points.first().x, stroke.points.first().y)
-                                    for (i in 1 until stroke.points.size) {
-                                        lineTo(stroke.points[i].x, stroke.points[i].y)
-                                    }
-                                }
-                            }
-                            drawPath(
-                                path = path,
-                                color = Color(stroke.color),
-                                style = Stroke(
-                                    width = stroke.strokeWidth,
-                                    cap = StrokeCap.Round,
-                                    join = StrokeJoin.Round
-                                )
-                            )
-                        }
-                    }
+                    DrawingLayer(
+                        drawingStrokes = drawingStrokes,
+                        activeStroke = activeStroke
+                    )
                 }
             }
 
             // 3. EMPTY STATE ILLUSTRATION
-            if (showEmptyState) {
-                Card(
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .padding(28.dp)
-                        .widthIn(max = 340.dp),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.95f)
-                    ),
-                    border = BorderStroke(
-                        1.dp,
-                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        // Artistic Overlapping Polaroid Preview
-                        Row(
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(vertical = 12.dp)
-                        ) {
-                            // Polaroid Card 1
-                            Card(
-                                modifier = Modifier
-                                    .size(76.dp, 92.dp)
-                                    .graphicsLayer(
-                                        rotationZ = -10f
-                                    )
-                                    .offset(x = 10.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color.White),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                                border = BorderStroke(1.dp, Color(0xFFE0E0E0))
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(5.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(58.dp)
-                                            .background(Color(0xFFF0F0F0)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Image,
-                                            contentDescription = null,
-                                            tint = Color.LightGray,
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                    }
-                                }
-                            }
-                            // Polaroid Card 2
-                            Card(
-                                modifier = Modifier
-                                    .size(76.dp, 92.dp)
-                                    .graphicsLayer(
-                                        rotationZ = 8f
-                                    )
-                                    .offset(x = -10.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color.White),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-                                border = BorderStroke(1.dp, Color(0xFFE2E2E2))
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(5.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(58.dp)
-                                            .background(Color(0xFFE3F2FD)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Landscape,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "Your Infinite Board is Empty",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Import reference photos or share them directly into DroidCanvas from other apps!",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                            lineHeight = 20.sp
-                        )
-                        Spacer(modifier = Modifier.height(18.dp))
-                        Button(
-                            onClick = {
-                                pickerLauncher.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                )
-                            },
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Import Images", fontWeight = FontWeight.Bold)
-                        }
-
-                    }
-                }
-            }
+            EmptyStateCard(
+                showEmptyState = showEmptyState,
+                pickerLauncher = pickerLauncher,
+                modifier = Modifier.align(Alignment.Center)
+            )
 
             // 3. DRAWING OVERLAY TO CAPTURE SINGLE TOUCHES WHEN DRAW MODE IS ACTIVE
             if (isDrawModeEnabled) {
@@ -912,109 +666,30 @@ fun DroidCanvasScreen(
             }
 
             // 3.7. MULTI-SELECT CONTEXTUAL ACTIONS PANEL (Floating above bottom bar when items are selected in multi-select mode)
-            androidx.compose.animation.AnimatedVisibility(
-                visible = isMultiSelectMode && selectedItemIds.isNotEmpty(),
-                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = 88.dp) // Float elegantly above the bottom dock
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = if (darkTheme) Color(0xFF1E2127) else Color(0xFFEFF1F6),
-                    border = BorderStroke(
-                        1.dp,
-                        if (darkTheme) Color(0xFF32363F) else Color(0xFFDCDFE7)
-                    ),
-                    tonalElevation = 8.dp,
-                    shadowElevation = 12.dp,
-                    modifier = Modifier.testTag("multi_select_actions_panel")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Selection Count Text
-                        Text(
-                            text = "${selectedItemIds.size} Selected",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = if (darkTheme) Color.White else Color.Black
-                        )
+            MultiSelectActionsPanel(
+                isMultiSelectMode = isMultiSelectMode,
+                selectedItemIds = selectedItemIds,
+                darkTheme = darkTheme,
+                onTogglePin = { viewModel.togglePinSelectedItems() },
+                onToggleValues = { viewModel.toggleValuesSelectedItems() },
+                onDeleteSelected = { viewModel.deleteSelectedItems() },
+                onClearSelection = { viewModel.selectItem(null) }
+            )
 
-                        // Vertical Divider
-                        Box(
-                            modifier = Modifier
-                                .width(1.dp)
-                                .height(20.dp)
-                                .background(if (darkTheme) Color(0xFF32363F) else Color(0xFFDCDFE7))
-                        )
-
-                        // Pin/Unpin Button
-                        IconButton(
-                            onClick = { viewModel.togglePinSelectedItems() },
-                            modifier = Modifier.size(36.dp).testTag("multi_select_pin")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PushPin,
-                                contentDescription = "Pin/Unpin Selected",
-                                tint = if (darkTheme) Color.White else Color(0xFF2E4E80),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        // Values Study Mode Button
-                        IconButton(
-                            onClick = { viewModel.toggleValuesSelectedItems() },
-                            modifier = Modifier.size(36.dp).testTag("multi_select_values")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Contrast,
-                                contentDescription = "Toggle Values Study",
-                                tint = if (darkTheme) Color.White else Color(0xFF2E4E80),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        // Delete Selected Button
-                        IconButton(
-                            onClick = { viewModel.deleteSelectedItems() },
-                            modifier = Modifier.size(36.dp).testTag("multi_select_delete")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Delete Selected",
-                                tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        // Divider
-                        Box(
-                            modifier = Modifier
-                                .width(1.dp)
-                                .height(20.dp)
-                                .background(if (darkTheme) Color(0xFF32363F) else Color(0xFFDCDFE7))
-                        )
-
-                        // Clear Selection Button
-                        IconButton(
-                            onClick = { viewModel.selectItem(null) },
-                            modifier = Modifier.size(36.dp).testTag("multi_select_clear")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Clear Selection",
-                                tint = if (darkTheme) Color(0xFF707684) else Color(0xFF8E95A5),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                }
-            }
+            // 3.8. SINGLE-SELECT CONTEXTUAL ACTIONS PANEL (Floating above bottom bar when a single item is selected)
+            SingleSelectActionsPanel(
+                selectedItem = selectedItem,
+                isMultiSelectMode = isMultiSelectMode,
+                darkTheme = darkTheme,
+                onDuplicate = { selectedItem?.let { viewModel.duplicateItem(it) } },
+                onTogglePin = { selectedItem?.let { viewModel.togglePinItem(it) } },
+                onToggleValues = { selectedItem?.let { viewModel.toggleValuesEnabled(it) } },
+                onBringToFront = { selectedItem?.let { viewModel.bringToFront(it) } },
+                onSendToBack = { selectedItem?.let { viewModel.sendToBack(it) } },
+                onDelete = { selectedItem?.let { viewModel.deleteItem(it) } },
+                onClearSelection = { viewModel.selectItem(null) },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
 
             // 3.6. FLOATING CONSOLIDATED BOTTOM BAR (Bottom Center)
             val canUndo by viewModel.canUndo.collectAsState()
@@ -2879,7 +2554,6 @@ fun CanvasItemView(
     val context = LocalContext.current
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     val coroutineScope = rememberCoroutineScope()
-    var isLongPressMenuExpanded by remember { mutableStateOf(false) }
 
     var isDragging by remember { mutableStateOf(false) }
     var isResizing by remember { mutableStateOf(false) }
@@ -3011,7 +2685,6 @@ fun CanvasItemView(
                                     if (!isMultiTouch && accumulatedDrag.getDistance() < 10f && !dragActive && !globalIsMultiTouch) {
                                         isLongPressTriggered = true
                                         viewModel.selectItem(latestItem.id)
-                                        isLongPressMenuExpanded = true
                                     }
                                 } catch (e: Exception) {
                                     // Cancelled
@@ -3375,163 +3048,6 @@ fun CanvasItemView(
                     )
                 }
             }
-        }
-
-        // Long press Context Menu explicitly requested
-        DropdownMenu(
-            expanded = isLongPressMenuExpanded,
-            onDismissRequest = { isLongPressMenuExpanded = false },
-            shape = RoundedCornerShape(20.dp),
-            modifier = Modifier
-                .width(240.dp)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)), shape = RoundedCornerShape(20.dp))
-        ) {
-            // Section 1: Workspace
-            Text(
-                text = "WORKSPACE",
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
-                fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
-            )
-            DropdownMenuItem(
-                text = { Text("Duplicate", fontWeight = FontWeight.Medium, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface) },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.ContentCopy,
-                        contentDescription = "Duplicate reference",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                },
-                onClick = {
-                    viewModel.duplicateItem(item)
-                    isLongPressMenuExpanded = false
-                }
-            )
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp, horizontal = 12.dp)
-                    .height(1.dp)
-                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-            )
-
-            // Section 2: Study Tools
-            Text(
-                text = "STUDY TOOLS",
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 4.dp),
-                fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
-            )
-            DropdownMenuItem(
-                text = { Text(if (latestItem.isPinned) "Unpin Reference" else "Pin Reference", fontWeight = FontWeight.Medium, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface) },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.PushPin,
-                        contentDescription = "Pin item",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                },
-                onClick = {
-                    viewModel.togglePinItem(latestItem)
-                    isLongPressMenuExpanded = false
-                }
-            )
-            DropdownMenuItem(
-                text = { Text(if (latestItem.isValuesEnabled) "Show in Color" else "Study Values (Posterized)", fontWeight = FontWeight.Medium, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface) },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Contrast,
-                        contentDescription = "Toggle Values Study",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                },
-                onClick = {
-                    viewModel.toggleValuesEnabled(latestItem)
-                    isLongPressMenuExpanded = false
-                }
-            )
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp, horizontal = 12.dp)
-                    .height(1.dp)
-                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-            )
-
-            // Section 3: Arrangement
-            Text(
-                text = "ARRANGEMENT",
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 4.dp),
-                fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp
-            )
-            DropdownMenuItem(
-                text = { Text("Bring to Front", fontWeight = FontWeight.Medium, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface) },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.FlipToFront,
-                        contentDescription = "Bring reference to front",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                },
-                onClick = {
-                    viewModel.bringToFront(item)
-                    isLongPressMenuExpanded = false
-                }
-            )
-            DropdownMenuItem(
-                text = { Text("Send to Back", fontWeight = FontWeight.Medium, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface) },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Layers,
-                        contentDescription = "Send reference to back",
-                        tint = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                },
-                onClick = {
-                    viewModel.sendToBack(item)
-                    isLongPressMenuExpanded = false
-                }
-            )
-            
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp, horizontal = 12.dp)
-                    .height(1.dp)
-                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-            )
-            
-            // Section 4: Critical Action
-            DropdownMenuItem(
-                text = { Text("Delete Reference", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.error) },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete reference",
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(18.dp)
-                    )
-                },
-                onClick = {
-                    viewModel.deleteItem(item)
-                    isLongPressMenuExpanded = false
-                }
-            )
         }
 
     }
