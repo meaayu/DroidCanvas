@@ -9,12 +9,12 @@ on:
 
 jobs:
   build:
-    name: Build Test APK
+    name: Build Release APK
     runs-on: ubuntu-latest
-
-    # Make the secret available to all steps inside this job via an environment variable
+    
     env:
       HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      GRADLE_OPTS: "-Xmx3072m -XX:MaxMetaspaceSize=512m"
 
     steps:
       - name: Checkout Repository
@@ -23,35 +23,49 @@ jobs:
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
+          distribution: 'temurin'
           java-version: '17'
           cache: 'gradle'
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: wrapper
+          cache-disabled: false
 
-      - name: Generate Gradle Wrapper
-        run: gradle wrapper
+      - name: Grant Execute Permission to Gradlew
+        run: chmod +x gradlew
 
       - name: Decode Keystore
         if: ${{ env.HAS_KEYSTORE != '' }}
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > ${{ github.workspace }}/release.jks
 
+      - name: Build Debug APK (Test)
+        run: ./gradlew assembleDebug --build-cache --parallel --stacktrace
+        continue-on-error: true
+
       - name: Build Signed Release APK
         if: ${{ env.HAS_KEYSTORE != '' }}
-        run: ./gradlew assembleRelease --stacktrace
+        run: ./gradlew assembleRelease --build-cache --parallel --stacktrace
         env:
           ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/release.jks
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
 
-      - name: Upload Signed Release APK Artifact
-        if: ${{ env.HAS_KEYSTORE != '' }}
+      - name: Upload Release APK
+        if: ${{ env.HAS_KEYSTORE != '' && success() }}
         uses: actions/upload-artifact@v4
         with:
           name: app-release-apk
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Build Output Summary
+        if: always()
+        run: |
+          echo "## Build Status" >> $GITHUB_STEP_SUMMARY
+          echo "- Debug Build: $([ -f app/build/outputs/apk/debug/app-debug.apk ] && echo '✅ Success' || echo '⚠️ Skipped')" >> $GITHUB_STEP_SUMMARY
+          echo "- Release Build: $([ -f app/build/outputs/apk/release/app-release.apk ] && echo '✅ Success' || echo '❌ Failed')" >> $GITHUB_STEP_SUMMARY
