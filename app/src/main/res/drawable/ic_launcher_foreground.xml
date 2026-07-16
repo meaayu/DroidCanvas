@@ -1,49 +1,8 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-
-    <!-- 1. Centered Reference Card (Solid White, high-contrast) -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M 37,38 L 71,38 A 6,6 0 0 1 77,44 L 77,78 A 6,6 0 0 1 71,84 L 37,84 A 6,6 0 0 1 31,78 L 31,44 A 6,6 0 0 1 37,38 Z" />
-
-    <!-- 2. Landscape details inside Card (flush with bottom Y=84) -->
-    <!-- Left/Back Mountain -->
-    <path
-        android:fillColor="#818CF8"
-        android:pathData="M 38,84 L 54,55 L 70,84 Z" />
-
-    <!-- Right/Front Mountain -->
-    <path
-        android:fillColor="#4F46E5"
-        android:pathData="M 52,84 L 61,65 L 70,84 Z" />
-
-    <!-- Sun inside card -->
-    <path
-        android:fillColor="#F59E0B"
-        android:pathData="M 63,45.5 A 3.5,3.5 0 1 1 63,52.5 A 3.5,3.5 0 1 1 63,45.5 Z" />
-
-    <!-- 3. Minimal Centered Thumbtack / Pushpin -->
-    <!-- Metal needle pointing to (54, 38) -->
-    <path
-        android:fillColor="#94A3B8"
-        android:pathData="M 53.5,32 L 54.5,32 L 54,38 Z" />
-
-    <!-- Pin flange -->
-    <path
-        android:fillColor="#EF4444"
-        android:pathData="M 51,30 L 57,30 L 57,32 L 51,32 Z" />
-
-    <!-- Pin body grip -->
-    <path
-        android:fillColor="#DC2626"
-        android:pathData="M 52.5,26 L 55.5,26 L 55,30 L 53,30 Z" />
-
-    <!-- Pin top head -->
-    <path
-        android:fillColor="#EF4444"
-        android:pathData="M 54,23 A 2,2 0 1 1 54,27 A 2,2 0 1 1 54,23 Z" />
-
-</vector>
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:width="66dp"
+        android:height="66dp"
+        android:drawable="@drawable/ic_launcher_icon_1784170152078"
+        android:gravity="center" />
+</layer-list>
